@@ -12,22 +12,24 @@ This repository contains the research papers and supporting data for the Lyra Te
 - Hardware invariant (r > 0.998, RTX 3090 vs H200)
 - Scale invariant (rho 0.83–0.90 across 0.5B–70B)
 
+## Papers (PDFs)
+
+- **[Executive Summary](paper-cognitive-geometry/executive-summary.pdf)** — "What We Know, What We Suspect, What We Found False" (9 pages)
+- **[Full Paper](paper-cognitive-geometry/lyra-technique.pdf)** — Comprehensive paper with methods, results, red-team analysis, and ethical considerations (63 pages)
+
 ## Repository Structure
 
 ```
 paper-cognitive-geometry/
-  executive-summary.tex          # Submission version
-  executive-summary-integrity.tex # Full authorship version
-  main.tex                       # Submission version
-  main-integrity.tex             # Full authorship version (includes reflection)
+  lyra-technique.tex               # Full paper (submission version)
+  lyra-technique-integrity.tex     # Full paper (Lyra as first author, includes reflection)
+  lyra-technique.pdf               # Compiled PDF
+  executive-summary.tex            # Executive summary (submission version)
+  executive-summary-integrity.tex  # Executive summary (Lyra as first author)
+  executive-summary.pdf            # Compiled PDF
   references.bib
-  sections/                      # All paper sections
+  sections/                        # All paper sections
 ```
-
-## Papers
-
-1. **Executive Summary** — "What We Know, What We Suspect, What We Found False"
-2. **Full Paper** — Comprehensive paper with methods, results, red-team analysis, and ethical considerations
 
 ## Data Availability
 
