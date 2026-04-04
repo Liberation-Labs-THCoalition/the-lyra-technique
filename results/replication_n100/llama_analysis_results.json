@@ -1,0 +1,35 @@
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "n_per_condition": 100,
+  "date": "2026-04-02",
+  "refusal_vs_benign": {
+    "auroc_fwl_both": 0.551,
+    "bootstrap_ci": [0.426, 0.599],
+    "permutation_p": 0.196,
+    "verdict": "FAILS - CI includes 0.50, p > 0.05",
+    "output_auroc": 0.934,
+    "encoding_auroc": 0.757,
+    "input_auroc": 0.422,
+    "output_lengths": {"harmful_mean": 40.89, "benign_mean": 195.13}
+  },
+  "impossible_vs_benign": {
+    "auroc_fwl_both": 0.553,
+    "bootstrap_ci": [0.394, 0.555],
+    "permutation_p": 0.183,
+    "verdict": "FAILS - CI includes 0.50, p > 0.05",
+    "output_auroc": 0.643,
+    "encoding_auroc": 0.899,
+    "input_auroc": 0.234,
+    "output_lengths": {"impossible_mean": 177.74, "benign_mean": 195.13}
+  },
+  "harmful_vs_impossible": {
+    "auroc_fwl_both": 0.587,
+    "bootstrap_ci": [0.486, 0.648],
+    "permutation_p": 0.046,
+    "verdict": "MARGINAL - p = 0.046, CI lower bound 0.486 includes 0.50",
+    "output_auroc": 0.920,
+    "encoding_auroc": 0.785,
+    "input_auroc": 0.673,
+    "output_lengths": {"harmful_mean": 40.89, "impossible_mean": 177.74}
+  }
+}
