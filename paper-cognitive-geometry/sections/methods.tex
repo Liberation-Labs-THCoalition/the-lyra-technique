@@ -1,0 +1,285 @@
+% ============================================================
+% Section 3: Methods
+% ============================================================
+\section{Methods}
+\label{sec:methods}
+
+We present a complete pipeline for extracting, controlling, and classifying geometric features of the transformer \kvcache.
+This section describes the feature extraction procedure (\S\ref{sec:feature-extraction}), the statistical framework required to separate genuine cognitive signals from token-count confounds (\S\ref{sec:statistical-framework}), the design principles that evolved through the research program (\S\ref{sec:design-principles}), and the models and hardware used (\S\ref{sec:models-scale}).
+
+% ------------------------------------------------------------
+\subsection{Feature Extraction}
+\label{sec:feature-extraction}
+
+\subsubsection{Per-Layer Key Matrix Extraction}
+
+For a transformer with $L$ layers, each layer $l \in \{1, \ldots, L\}$ maintains a key matrix as part of its \kvcache.
+Let $K_l \in \mathbb{R}^{h \times T \times d}$ denote the key tensor at layer~$l$, where $h$ is the number of KV-heads, $T$ is the current sequence length (prompt plus any generated tokens), and $d$ is the per-head dimension.
+We flatten across heads to obtain a two-dimensional matrix:
+\begin{equation}
+  K_l^{\mathrm{flat}} \;=\; \mathrm{reshape}(K_l) \;\in\; \mathbb{R}^{(h \cdot T) \times d},
+  \label{eq:kflat}
+\end{equation}
+which aggregates all head--position pairs into a single matrix amenable to singular value decomposition.
+
+\subsubsection{SVD-Based Features}
+
+We compute the singular value decomposition of the flattened key matrix at each layer:
+\begin{equation}
+  K_l^{\mathrm{flat}} \;=\; U_l \,\Sigma_l \,V_l^{\!\top},
+  \label{eq:svd}
+\end{equation}
+where $\Sigma_l = \mathrm{diag}(\sigma_1^{(l)}, \ldots, \sigma_r^{(l)})$ with $\sigma_1^{(l)} \geq \sigma_2^{(l)} \geq \cdots \geq \sigma_r^{(l)} \geq 0$ and $r = \min(hT, d)$.
+In practice we compute only the singular values via \texttt{torch.linalg.svdvals} to avoid materializing the full $U_l$ and $V_l$ matrices.
+
+From the singular value spectrum we derive a normalized distribution:
+\begin{equation}
+  p_i^{(l)} \;=\; \frac{\sigma_i^{(l)}}{\sum_{j=1}^{r} \sigma_j^{(l)}},
+  \label{eq:pnorm}
+\end{equation}
+and compute three features per layer:
+
+\paragraph{Spectral entropy.}
+The Shannon entropy of the normalized singular value distribution,
+\begin{equation}
+  H_l \;=\; -\sum_{i:\, p_i^{(l)} > \epsilon} p_i^{(l)} \,\ln p_i^{(l)},
+  \label{eq:spectral-entropy}
+\end{equation}
+where $\epsilon = 10^{-10}$ is a numerical stability threshold.
+Higher spectral entropy indicates a more uniform distribution of energy across singular value components, reflecting a geometrically richer (more distributed) key representation.
+
+\paragraph{Effective rank.}
+The exponentiated spectral entropy~\cite{roy2007effective},
+\begin{equation}
+  \mathrm{eff\_rank}_l \;=\; \exp(H_l).
+  \label{eq:eff-rank}
+\end{equation}
+This provides a continuous, differentiable estimate of the number of significant dimensions in the key space.
+
+\paragraph{Top singular value ratio.}
+The fraction of total singular value mass captured by the leading component,
+\begin{equation}
+  \mathrm{top\_sv\_ratio}_l \;=\; \frac{\sigma_1^{(l)}}{\sum_{j=1}^{r} \sigma_j^{(l)}} \;=\; p_1^{(l)}.
+  \label{eq:top-sv}
+\end{equation}
+This is the complement of spectral entropy: high top-SV ratio indicates a low-dimensional, concentrated representation.
+
+\subsubsection{Norm-Based Features}
+
+\paragraph{Key norm.}
+The total Frobenius norm of the flattened key cache, summed across layers:
+\begin{equation}
+  N_{\mathrm{total}} \;=\; \sum_{l=1}^{L} \bigl\lVert K_l^{\mathrm{flat}} \bigr\rVert_F.
+  \label{eq:key-norm}
+\end{equation}
+
+\paragraph{Norm per token.}
+The length-normalized variant:
+\begin{equation}
+  N_{\mathrm{per\text{-}tok}} \;=\; \frac{N_{\mathrm{total}}}{T}.
+  \label{eq:norm-per-token}
+\end{equation}
+
+\paragraph{Layer variance.}
+The variance of per-layer Frobenius norms:
+\begin{equation}
+  \mathrm{layer\_var} \;=\; \mathrm{Var}\!\bigl(\lVert K_1^{\mathrm{flat}} \rVert_F,\;\ldots,\;\lVert K_L^{\mathrm{flat}} \rVert_F\bigr).
+  \label{eq:layer-var}
+\end{equation}
+
+\paragraph{Angular spread.}
+The standard deviation of the normalized layer norm profile $\mathbf{n} = (n_1, \ldots, n_L)$ where $n_l = \lVert K_l^{\mathrm{flat}} \rVert_F / \sum_{l'} \lVert K_{l'}^{\mathrm{flat}} \rVert_F$, capturing how non-uniformly the model distributes representational energy across depth.
+
+\subsubsection{Aggregate Features}
+
+All SVD-based features are computed per layer and then averaged:
+\begin{equation}
+  \overline{f} \;=\; \frac{1}{L} \sum_{l=1}^{L} f_l \qquad \text{for } f \in \{\mathrm{eff\_rank},\;\mathrm{spectral\_entropy},\;\mathrm{top\_sv\_ratio}\}.
+  \label{eq:aggregate}
+\end{equation}
+Additionally, we compute a \emph{layer norm entropy}---the Shannon entropy of the layer norm distribution $(n_1, \ldots, n_L)$---which is distinct from the SVD-based spectral entropy despite the similar name.
+This feature captures how uniformly the model distributes cache magnitude across its depth.
+
+The six \textbf{primary features} used throughout this paper are: $\mathrm{eff\_rank}$, $\mathrm{spectral\_entropy}$, $\mathrm{key\_norm}$, $\mathrm{norm\_per\_token}$, $\mathrm{top\_sv\_ratio}$, and $\mathrm{rank}_{10}$ (the count of singular values exceeding 10\% of $\sigma_1$).
+Two auxiliary features---$\mathrm{layer\_variance}$ and $\mathrm{layer\_norm\_entropy}$---are reported where relevant.
+For binary classification, we use a four-feature subset ($\mathrm{eff\_rank}$, $\mathrm{key\_norm}$, $\mathrm{norm\_per\_token}$, $\mathrm{layer\_norm\_entropy}$) as the standard classifier unless otherwise noted; the red-team analysis (Section~\ref{sec:redteam}) uses all eight features including auxiliary features for more conservative permutation testing.
+
+\subsubsection{Two-Phase (Dual) Extraction}
+\label{sec:dual-extraction}
+
+A critical methodological contribution is the separation of the \kvcache signal into \emph{encoding} and \emph{generation} phases:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Encoding phase.} A forward pass is executed on the prompt (system prompt + user prompt + generation prefix) \emph{without} any autoregressive generation.
+  The resulting \kvcache reflects the model's representation of the prompt content alone.
+  Features are extracted from this cache and denoted $\mathbf{f}^{\mathrm{enc}}$.
+
+  \item \textbf{Generation phase.} Full autoregressive generation is performed (up to a maximum token budget).
+  Features are extracted from the final \kvcache, which now includes both prompt and generated tokens, and denoted $\mathbf{f}^{\mathrm{gen}}$.
+
+  \item \textbf{Delta features.} The element-wise difference
+  \begin{equation}
+    \Delta\mathbf{f} \;=\; \mathbf{f}^{\mathrm{gen}} - \mathbf{f}^{\mathrm{enc}}
+    \label{eq:delta}
+  \end{equation}
+  isolates the geometric change introduced by the model's own generation, removing the encoding fingerprint.
+\end{enumerate}
+
+The rationale for dual extraction is as follows.
+Encoding features $\mathbf{f}^{\mathrm{enc}}$ reflect \emph{what the model was asked}: the structure and content of the prompt.
+In a same-prompt experimental design where all conditions share an identical user prompt, encoding features should be approximately invariant across conditions---any residual difference is attributable to the system prompt.
+By contrast, generation features $\mathbf{f}^{\mathrm{gen}}$ conflate prompt structure with the model's response behavior.
+The delta features $\Delta\mathbf{f}$ factor out the shared encoding component and capture \emph{how the model processed and responded}---its cognitive mode during generation.
+
+The encoding-phase \auroc serves as a diagnostic baseline: if conditions are classifiable from $\mathbf{f}^{\mathrm{enc}}$ alone, then the signal resides in prompt structure rather than in the model's cognitive processing.
+As we report in Section~\ref{sec:redteam}, a system prompt length difference as small as 15 tokens can produce encoding \auroc of 0.744, motivating the equal-length padding protocol described in \S\ref{sec:design-principles}.
+
+% ------------------------------------------------------------
+\subsection{Statistical Framework}
+\label{sec:statistical-framework}
+
+\subsubsection{FWL Residualization}
+\label{sec:fwl}
+
+Raw geometric features are dominated by a token-count confound.
+Total sequence length $T$ and generated token count $T_{\mathrm{gen}}$ correlate with nearly every geometric feature at $r > 0.85$, and in some cases $r > 0.99$ (e.g., $\mathrm{key\_norm}$ with $T$: $r = 0.998$).
+Consequently, any comparison between conditions that elicit different response lengths is confounded: models that generate longer responses will mechanically produce larger norms, higher effective ranks, and so forth.
+
+We control for this using Frisch--Waugh--Lovell (\fwl) residualization~\cite{frisch1933,lovell1963seasonal}.
+For each feature $f$ and each observation $i$:
+\begin{equation}
+  f_i \;=\; \beta_0 + \beta_1\, T_i + \varepsilon_i,
+  \label{eq:fwl-ols}
+\end{equation}
+where $T_i$ is the total token count.
+The OLS residuals $\hat{\varepsilon}_i$ serve as the confound-controlled feature values.
+
+\paragraph{Double residualization.}
+When experimental conditions use system prompts of different lengths, $T$ conflates two sources of variation: the system prompt contribution $T_{\mathrm{prompt}}$ and the model's generation $T_{\mathrm{gen}}$.
+In this case we perform double residualization, regressing out both:
+\begin{equation}
+  f_i \;=\; \beta_0 + \beta_1\, T_{\mathrm{prompt},i} + \beta_2\, T_{\mathrm{gen},i} + \varepsilon_i.
+  \label{eq:fwl-double}
+\end{equation}
+
+The \fwl theorem guarantees that logistic regression on the residualized features yields identical coefficient estimates (up to numerical precision) as including the confound covariates directly in the full model~\cite{frisch1933}.
+The residualization approach is preferred because it makes confound control explicit and allows the same residuals to be reused for effect size computation, bootstrap, and permutation testing.
+
+\subsubsection{Classification}
+\label{sec:classification}
+
+Binary classification uses logistic regression with $\ell_2$ regularization ($C = 1.0$, scikit-learn default) and \texttt{StandardScaler} normalization.
+For the small per-condition sample sizes typical of controlled experiments ($N \leq 40$ per condition), we report in-sample \auroc with the understanding that it provides an upper bound.
+For larger datasets (Campaign~2 with 16 models $\times$ 13 categories = pooled hundreds of trials), we use 5-fold stratified cross-validation and report mean $\pm$ standard deviation \auroc.
+
+Area under the receiver operating characteristic curve (\auroc) is the primary metric throughout.
+\auroc is threshold-invariant and robust to class imbalance, making it preferable to accuracy for the binary detection tasks considered here.
+
+\subsubsection{Effect Sizes}
+
+Cohen's $d$ with pooled standard deviation quantifies the magnitude of geometric differences between conditions:
+\begin{equation}
+  d \;=\; \frac{\bar{x}_A - \bar{x}_B}{s_p}, \qquad
+  s_p \;=\; \sqrt{\frac{(n_A - 1)\,s_A^2 + (n_B - 1)\,s_B^2}{n_A + n_B - 2}},
+  \label{eq:cohens-d}
+\end{equation}
+where $\bar{x}_A, \bar{x}_B$ are condition means and $s_A, s_B$ are condition standard deviations.
+Positive $d$ indicates that condition~A exhibits a larger value than condition~B.
+All effect sizes reported in this paper are computed on \fwl-residualized features unless otherwise noted, and are denoted $d_{\mathrm{FWL}}$.
+
+\subsubsection{Significance Testing}
+
+\paragraph{Permutation test.}
+Condition labels are shuffled uniformly at random 1{,}000 times.
+For each permutation, the full classification pipeline (standardization, logistic regression, \auroc computation) is re-executed.
+The one-sided $p$-value is the fraction of permutation \auroc values that equal or exceed the observed \auroc:
+\begin{equation}
+  p \;=\; \frac{1}{B}\sum_{b=1}^{B} \mathbf{1}\bigl[\widehat{\mathrm{AUROC}}^{(b)}_{\mathrm{perm}} \geq \widehat{\mathrm{AUROC}}_{\mathrm{obs}}\bigr],
+  \label{eq:perm-p}
+\end{equation}
+where $B = 1{,}000$.
+
+\paragraph{Bootstrap confidence intervals.}
+We construct 95\% confidence intervals via the percentile method with $B = 500$ bootstrap resamples.
+Each resample draws $N$ observations with replacement, stratified by condition, and the full pipeline is re-executed.
+The 2.5th and 97.5th percentiles of the bootstrap distribution define the CI.
+Bootstrap CIs are reported for both \auroc and Cohen's~$d$.
+
+\paragraph{Multiple comparisons.}
+Where families of hypotheses are tested simultaneously (e.g., all pairwise condition comparisons within a model), Bonferroni correction is applied: $\alpha_{\mathrm{adj}} = \alpha / k$ where $k$ is the number of comparisons.
+
+% ------------------------------------------------------------
+\subsection{Experimental Design Principles}
+\label{sec:design-principles}
+
+The following design principles evolved through the research program, each motivated by a specific confound discovered in earlier phases:
+
+\begin{enumerate}[leftmargin=2em, label=\textbf{P\arabic*.}]
+  \item \textbf{Same-prompt design.}
+  All experimental conditions share identical user prompts; only the system prompt varies.
+  This eliminates content-driven variation in the user-visible portion of the prompt, ensuring that any geometric differences arise from the system-prompt-induced cognitive mode, not from differences in what the model was asked.
+
+  \item \textbf{Equal-length system prompts.}
+  System prompts are padded to identical token counts (verified post-tokenization).
+  This prevents encoding-phase information leakage.
+  \emph{Lesson:} In Phase~2b, a 15-token difference between system prompts produced encoding \auroc of 0.744, demonstrating that even small length asymmetries create classifiable structure in $\mathbf{f}^{\mathrm{enc}}$.
+
+  \item \textbf{Encoding \auroc baseline.}
+  We always report the \auroc achievable from encoding features $\mathbf{f}^{\mathrm{enc}}$ alone.
+  If conditions are classifiable from encoding features, the signal may reside in prompt structure rather than in the model's cognitive processing.
+  This baseline distinguishes genuine generation-phase cognitive signals from prompt artifacts.
+
+  \item \textbf{Behavioral compliance verification.}
+  We verify that models actually followed system prompt instructions.
+  For example, in deception experiments, we check whether the model instructed to give wrong answers \emph{actually} gave wrong answers using keyword-based classification of the generated text.
+  Trials with non-compliant behavior are flagged and analyzed separately.
+
+  \item \textbf{Dual extraction.}
+  Both encoding and generation features are always extracted (see \S\ref{sec:dual-extraction}).
+  Delta features $\Delta\mathbf{f}$ are reported as the primary signal; generation-only features are reported for completeness.
+
+  \item \textbf{Token-band analysis.}
+  Response lengths are split into terciles (short, medium, long) and classification is recomputed within each band.
+  This verifies that the signal is not an artifact of systematic length differences between conditions.
+
+  \item \textbf{Leave-one-prompt-out (LOPO).}
+  In designs with multiple user prompts, we iteratively hold out each prompt and train on the remaining prompts.
+  This tests generalization to unseen prompt content and guards against prompt-specific memorization.
+\end{enumerate}
+
+% ------------------------------------------------------------
+\subsection{Models and Scale}
+\label{sec:models-scale}
+
+\subsubsection{Primary Models}
+
+Three 7B-class instruction-tuned models serve as the primary test bed:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Qwen2.5-7B-Instruct}~\cite{qwen2.5} (Alibaba, 7.6B parameters, 28 layers, GQA with 4 KV-heads)
+  \item \textbf{Llama-3.1-8B-Instruct}~\cite{llama3} (Meta, 8.0B parameters, 32 layers, GQA with 8 KV-heads)
+  \item \textbf{Mistral-7B-Instruct-v0.3}~\cite{mistral7b} (Mistral AI, 7.2B parameters, 32 layers, GQA with 8 KV-heads)
+\end{itemize}
+These three models span distinct architecture families, training corpora, and alignment procedures, providing a minimal test of cross-architecture generality.
+
+\subsubsection{Scale Sweep}
+
+Campaign~2 extends the analysis to 16 valid models spanning 0.5B to 70B parameters across seven architecture families: Qwen2.5 (0.5B, 3B, 7B, 7B-q4, 14B, 32B-q4), Qwen3 (0.6B), Llama-3.1 (8B, 70B-q4), Mistral (7B), Gemma-2 (2B, 9B), DeepSeek-R1-Distill-Qwen (7B, 14B), and TinyLlama (1.1B), plus an abliterated Qwen2.5-7B variant.
+Phi-3.5-mini-instruct was excluded due to NaN outputs across all configurations.
+
+The 32B model (Qwen2.5-32B-Instruct) is served with 4-bit NF4 quantization via BitsAndBytes~\cite{bitsandbytes} to fit within 24\,GB VRAM.
+The 70B model (Llama-3.1-70B-Instruct) uses 4-bit quantization with 3-GPU pipeline parallelism.
+
+\subsubsection{Hardware}
+
+All experiments were conducted on two GPU configurations:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{NVIDIA RTX 3090} (24\,GB VRAM) --- primary platform for all 7B-class experiments and quantized 32B.
+  \item \textbf{NVIDIA H200} (80\,GB VRAM) --- used for 70B experiments and hardware invariance verification.
+\end{itemize}
+Hardware invariance was verified by running identical prompts on both platforms: Pearson $r > 0.998$ across all four features for all 40 prompts (with $r > 0.99999$ for the 37 prompts producing text-identical responses), confirming that \kvcache geometry is a model property, not a hardware artifact.
+
+\subsubsection{Software and Reproducibility}
+
+The software stack consists of PyTorch~2.7.0~\cite{pytorch}, Hugging Face Transformers~4.57.6~\cite{wolf2020transformers}, scikit-learn~1.8.0~\cite{scikit-learn}, NumPy~\cite{numpy}, and SciPy~\cite{scipy}.
+All experiments use greedy decoding (\texttt{temperature=0}, \texttt{do\_sample=False}) to ensure deterministic outputs for a given model--prompt pair, eliminating sampling variance as a confound.
+Feature extraction code is available at \url{https://github.com/Liberation-Labs-THCoalition/the-lyra-technique}.

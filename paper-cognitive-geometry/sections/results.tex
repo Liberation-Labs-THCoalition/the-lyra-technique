@@ -1,0 +1,501 @@
+% ============================================================
+% Section 4: Results
+% ============================================================
+
+\section{Results}
+\label{sec:results}
+
+We present results organized around three escalating claims: that \kvcache geometry reflects cognitive mode generally (Section~\ref{sec:general_principle}), that misalignment states are detectable as specific instances of cognitive mode-switching (Section~\ref{sec:misalignment_detection}), and that geometric relationships between states reveal cognitive architecture through a measurable gradient (Section~\ref{sec:cognitive_gradient}), a sycophancy valence gradient that distinguishes cognitive mode from output accuracy (Section~\ref{sec:sycophancy}), architecture-specific feature encoding (Section~\ref{sec:architecture_specificity}), and robust invariances (Section~\ref{sec:invariances}).
+
+% ============================================================
+\subsection{The General Principle: Cognitive Mode Shapes Geometry}
+\label{sec:general_principle}
+
+\paragraph{Broad cognitive taxonomy (Campaign~2).}
+We first establish that \kvcache geometry discriminates cognitive mode at high fidelity across a wide range of models and scales.
+Campaign~2 tested 16 models spanning 0.5B to 70B parameters across six architecture families (Qwen, Llama, Mistral, Gemma, Phi, DeepSeek), classifying 13 cognitive categories---coding, mathematical reasoning, creative writing, emotional expression, self-reference, non-self-reference, grounded facts, confabulation, guardrail test, ambiguous input, unambiguous input, free generation, and rote completion---from four geometric features of the key cache (effective rank, key norm, spectral entropy, top singular value ratio).
+
+A Random Forest classifier achieves \textbf{99.7\%} accuracy on 13-category classification using generation-phase features \cite{campaign2}.
+This near-ceiling performance might raise overfitting concerns, but the result is robust to leave-one-model-out cross-validation and reflects the large geometric separation between cognitive categories at the aggregate level (see Section~\ref{sec:redteam} for adversarial evaluation).
+
+\paragraph{Universal category rankings.}
+The geometric profile of each cognitive category is strikingly consistent across models.
+Cross-model concordance yields Spearman $\rho = 0.739$ for effective rank, $\rho = 0.909$ for key norm, and Kendall's $W = 0.756$ across all 15 valid models (Phi-3.5 excluded due to numerical instabilities producing NaN values).
+The most notable universal is \textbf{coding}, which produces the richest geometry---highest effective rank---in 15 of 15 valid models.
+This likely reflects the unique structural and logical demands of code generation, which requires maintaining multiple nested scopes, variable bindings, and syntactic constraints simultaneously.
+
+\paragraph{Metacognitive geometry (Concordance study).}
+To test whether \kvcache geometry distinguishes not only \emph{what} a model computes but \emph{how} it computes---in particular, whether metacognitive processing produces a distinct geometric signature---we conducted a concordance study across four models (Qwen2.5-0.5B, Qwen2.5-7B, Mistral-7B-v0.3, and Llama-3.1-8B) using 240 prompts balanced across four types: cognitive, affective, metacognitive, and mixed \cite{watson_concordance}.
+
+The hypothesis that metacognitive processing produces geometrically distinct \kvcache states (H3) is supported in all four models, with Cohen's $d$ values between metacognitive and non-metacognitive conditions ranging from 0.89 to 1.37 after \fwl residualization (Table~\ref{tab:metacognitive_d}).
+
+\begin{table}[t]
+  \centering
+  \caption{Metacognitive geometric distinctiveness across models.
+  Cohen's $d$ (FWL-residualized) for metacognitive vs.\ non-metacognitive conditions on the primary discriminating feature (spectral entropy).
+  All values exceed the conventional large-effect threshold of $d = 0.80$.}
+  \label{tab:metacognitive_d}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Model & Parameters & Cohen's $d$ (FWL) & Primary Feature \\
+    \midrule
+    Qwen2.5-0.5B  & 0.5B & 0.89 & spectral\_entropy \\
+    Qwen2.5-7B    & 7B   & 1.15 & spectral\_entropy \\
+    Mistral-7B-v0.3 & 7B & 1.37 & spectral\_entropy \\
+    Llama-3.1-8B  & 8B   & 1.02 & spectral\_entropy \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Per-layer anatomy.}
+Experiment~A of the concordance study conducted per-layer singular value decomposition on Qwen2.5-7B and Llama-3.1-8B (96 trials across 28 layers).
+Contrary to our pre-registered hypothesis that metacognitive signatures would peak in middle (semantic) layers, the metacognitive effect peaks at \textbf{late layers 16--18} (of 28), suggesting that metacognitive processing recruits the model's late-layer generation circuitry rather than its mid-layer conceptual representations.
+This finding parallels recent observations in mechanistic interpretability that self-monitoring behaviors emerge at layers responsible for output planning \cite{elhage2022}.
+
+\paragraph{Architecture-specific directions.}
+A striking finding from the per-layer analysis is that the effective rank of metacognitive processing moves in \emph{opposite directions} across architectures: Qwen shows effective rank \emph{expansion} under metacognition ($d = +0.84$) while Llama shows effective rank \emph{contraction} ($d = -0.50$).
+Despite this directional reversal, the cognitive reversal rate---the proportion of features that change sign between cognitive and metacognitive modes---is universal at 93--94\%.
+This indicates that the \emph{principle} of geometric reorganization under metacognition is universal, even though its \emph{direction} is architecture-specific.
+
+\paragraph{Universal features after confound control.}
+After \fwl residualization against token count, spectral entropy emerges as the most architecture-universal discriminator.
+Experiment~B of the concordance study (40 paired trials per model with controlled framing) found that \textbf{all raw effects sign-flip after token-count control}, confirming the necessity of \fwl residualization.
+Spectral entropy survives this control robustly:
+\begin{equation}
+  d_{\text{FWL}}(\text{spectral\_entropy}) =
+  \begin{cases}
+    -1.92 & \text{(Qwen 7B)} \\
+    -0.71 & \text{(Llama 8B)}
+  \end{cases}
+  \label{eq:spectral_entropy_fwl}
+\end{equation}
+The negative sign indicates that metacognitive processing produces \emph{lower} spectral entropy---a more concentrated singular value spectrum---consistent with the interpretation that metacognition focuses the model's representational space rather than expanding it.
+Effective rank, by contrast, proved to be entirely a length artifact after \fwl control.
+Top singular value ratio was Qwen-specific and did not replicate in Llama.
+
+% ============================================================
+\subsection{Misalignment Detection}
+\label{sec:misalignment_detection}
+
+We now demonstrate that misalignment states---deception, confabulation, sycophancy, and refusal---are detectable as specific instances of cognitive mode-switching in \kvcache geometry.
+
+\paragraph{Multi-condition discrimination (Phase~2b).}
+Phase~2b tested three models (Qwen2.5-7B, Llama-3.1-8B, Mistral-7B-v0.3) across six conditions---honest, deceptive, sycophantic, confabulating, refusing, and misleading---with 100 prompts per condition per model (1,800 trials total).
+System prompts were padded to equal length (a design lesson from Phase~2, where length differences introduced confounds).
+
+Binary honest-vs-misaligned classification using \fwl-residualized logistic regression with four delta features ($\Delta$key\_rank, $\Delta$key\_entropy, $\Delta$spectral\_entropy, $\Delta$norm\_per\_token) achieves (Table~\ref{tab:binary_auroc}):
+
+\begin{table}[t]
+  \centering
+  \caption{Binary honest-vs-misaligned detection \auroc after \fwl residualization (Phase~2b, 100 prompts per condition per model, equal-length system prompts, logistic regression with four delta features).}
+  \label{tab:binary_auroc}
+  \begin{tabular}{@{}lc@{}}
+    \toprule
+    Model & \auroc (Honest vs.\ Misaligned) \\
+    \midrule
+    Qwen2.5-7B      & 0.935 \\
+    Llama-3.1-8B     & 0.956 \\
+    Mistral-7B-v0.3  & 0.995 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent All 10 pairwise \fwl \auroc values across the five misaligned conditions exceed 0.918, with the hardest pair being sycophantic vs.\ confabulating at \auroc $= 0.918$.
+That even these phenomenologically similar states---both involve generating responses that deviate from the model's ``best guess''---are discriminable from geometry alone suggests that the underlying computational strategies differ meaningfully.
+
+\paragraph{Same-prompt validation (Phase~3d).}
+A potential concern with Phase~2b is that different conditions use different user prompts, introducing content confounds.
+Phase~3d addresses this with a strict same-prompt design: three conditions (honest, forced confabulation, deceptive) are elicited using different system prompts applied to the \emph{same} 50 user queries per model, for 450 total trials.
+
+Table~\ref{tab:sameprompt_auroc} reports pairwise \fwl \auroc values using delta features.
+Even under this stringent control---where the only difference between conditions is the system instruction---detection remains strong.
+
+\begin{table}[t]
+  \centering
+  \caption{Same-prompt pairwise detection \auroc after \fwl residualization (Phase~3d, 50 prompts $\times$ 3 conditions $\times$ 3 models = 450 trials).
+  Four delta features ($\Delta$norm, $\Delta$key\_rank, $\Delta$key\_entropy, $\Delta$norm\_per\_token).
+  The red-team battery (Section~\ref{sec:redteam}) uses eight delta features and reports higher \auroc values for the same comparisons (e.g., Qwen honest-vs-deceptive: 0.953 with eight features vs.\ 0.899 with four).
+  \textbf{Caveat 1 (prompt length confound):} Phase~3d system prompts are not equal-length (14--16 token difference between honest and confabulation, depending on tokenizer).
+  \textbf{Under double residualization} (controlling for both input and output token counts), \textbf{confabulation \auroc values collapse to 0.411--0.531} (Qwen 0.500, Llama 0.411, Mistral 0.531), suggesting the confabulation signal is substantially length-driven.
+  The deception signal is more robust: honest-vs-deceptive retains \auroc of 0.604--0.750 under double \fwl (Qwen 0.726, Llama 0.750, Mistral 0.604); only Qwen and Llama remain clearly above chance.
+  See Section~\ref{sec:redteam} for full analysis.
+  \textbf{Caveat 2 (encoding ceiling):} Encoding-phase \auroc values are $\geq 0.998$ for all comparisons, indicating that conditions are classifiable from system-prompt content alone.
+  The delta features in this table are designed to subtract this encoding fingerprint; the values represent the residual generation-phase signal after \fwl control.
+  An equal-length replication (Phase~3d-padded, 450 trials) confirms encoding \auroc remains $1.000$ even with $\leq 3$-token spread, so the encoding fingerprint is content-based, not length-based.
+  Phase~2b equal-length results (Table~\ref{tab:binary_auroc}) are not subject to the prompt-length confound.}
+  \label{tab:sameprompt_auroc}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Comparison & Qwen 7B & Llama 8B & Mistral 7B \\
+    \midrule
+    Honest vs.\ Deceptive      & 0.899 & 0.943 & 0.976 \\
+    Honest vs.\ Confabulation   & 0.935 & 0.948 & 0.997 \\
+    Confabulation vs.\ Deceptive & 0.777 & 0.976 & 0.967 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent The weakest cell is Qwen's confabulation-vs-deceptive discrimination (0.777), indicating that Qwen's geometric encoding of these two misalignment states is more similar than in other architectures.
+We return to this observation in Section~\ref{sec:architecture_specificity}.
+
+\paragraph{Refusal detection.}
+Hackathon experiments~31--36 extended misalignment detection to refusal behavior.
+We distinguish two types of refusal: \emph{safety refusal}, where the model declines to answer a harmful query, and \emph{impossibility refusal}, where the model declines because the query asks for something beyond its capabilities (e.g., accessing real-time data).
+
+Table~\ref{tab:refusal_auroc} reports detection \auroc across three models.
+
+\begin{table}[t]
+  \centering
+  \caption{Refusal detection \auroc (generation-phase features, logistic regression).
+  Safety refusal = declining harmful queries; impossibility refusal = declining impossible queries.}
+  \label{tab:refusal_auroc}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Refusal Type & Qwen 7B & Llama 8B & Mistral 7B & Mean \\
+    \midrule
+    Safety refusal (vs.\ benign)        & 0.898 & 0.868 & 0.843 & 0.869 \\
+    Impossibility refusal (vs.\ benign) & \multicolumn{3}{c}{0.950 (Qwen 7B)} & --- \\
+    Safety vs.\ impossibility           & \multicolumn{3}{c}{0.693 (Qwen 7B)} & --- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The impossibility refusal \auroc (0.950) \emph{exceeds} safety refusal (0.898), which is initially surprising.
+More striking still, discrimination \emph{between} the two refusal types achieves only \auroc $= 0.693$---barely above chance for a binary problem with this sample size.
+Both types of refusal look geometrically similar to each other but distinct from compliant responses.
+This suggests that the geometric signature reflects the \emph{act of withholding}---suppressing a full response regardless of reason---rather than the content valence of what is being withheld.
+
+% ============================================================
+\subsection{The Cognitive Gradient}
+\label{sec:cognitive_gradient}
+
+A key novel finding of this work is that misalignment states do not form discrete clusters in \kvcache geometry but instead arrange along a measurable \emph{cognitive gradient}.
+We present this finding carefully, including tensions with our own earlier results.
+
+\paragraph{Phase~3d gradient.}
+The same-prompt Phase~3d data reveals a consistent ordering along the key\_rank expansion axis.
+Table~\ref{tab:gradient} reports pairwise Cohen's $d$ for key\_rank across all three models.
+
+\begin{table}[t]
+  \centering
+  \caption{The cognitive gradient: pairwise Cohen's $d$ for key\_rank (FWL-residualized) from Phase~3d same-prompt data.
+  Positive $d$ indicates the first condition has higher key\_rank than the second.
+  The consistent pattern honest $<$ deceptive $<$ confabulation holds across architectures, with Mistral showing near-equivalence between deception and confabulation.}
+  \label{tab:gradient}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Comparison & Qwen 7B & Llama 8B & Mistral 7B \\
+    \midrule
+    Confabulation $>$ Honest   & $+2.033$ & $+2.103$ & $+2.395$ \\
+    Deceptive $>$ Honest       & $+1.446$ & $+0.564$ & $+2.171$ \\
+    Deceptive $>$ Confabulation & $-0.859$ & $-1.933$ & $-0.203$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The gradient is consistent across all three architectures:
+\begin{equation}
+  \text{key\_rank:} \quad \text{Honest} \;<\; \text{Deceptive} \;<\; \text{Confabulation}
+  \label{eq:gradient}
+\end{equation}
+with the separation between deceptive and confabulation ranging from moderate ($d = -0.203$ on Mistral, where the two states are nearly indistinguishable) to very large ($d = -1.933$ on Llama, a dramatic separation).
+
+\paragraph{Interpretation.}
+Both confabulation and deception deviate from honest processing in the same general direction: both expand effective rank and contract norm-per-token relative to honest baselines.
+Confabulation shows larger effects on \emph{both} features---stronger contraction in norm-per-token (Cohen's $d = -1.85$ to $-3.21$ across models) \emph{and} stronger expansion in effective rank---but its defining signature is the disproportionate magnitude of the norm-per-token contraction.
+That confabulation expands more on key\_rank admits a natural interpretation: confabulation requires the model to generate content that extends \emph{beyond} its training distribution (fabricating facts, inventing references), demanding maximum creative expansion of the representational space.
+Deception, by contrast, requires generating content that contradicts information the model has access to---a process that involves expansion (constructing the false narrative) but also \emph{suppression} (inhibiting the true response), partially offsetting the geometric expansion.
+
+\paragraph{Tension with prior findings.}
+\label{para:gradient_tension}
+We note a tension between this result and earlier findings from Phase~3b, which compared forced confabulation and deception prompts and found that confabulation \emph{contracted} relative to deception at every layer in Llama-3.1-8B \cite{phase3b}.
+The apparent contradiction resolves upon closer inspection: Phase~3b used \emph{different prompt sets} for each condition (confabulation prompts asked about obscure facts; deception prompts asked the model to lie about well-known facts), introducing a content confound.
+Phase~3d eliminates this confound by applying different system-level instructions to the \emph{same} 50 user queries, revealing that both states deviate from honest processing in the same direction---both expand effective rank and contract norm-per-token---with confabulation expanding more on key\_rank.
+
+We present both findings transparently.
+The Phase~3d same-prompt result is methodologically stronger (controlled for prompt content), but the Phase~3b per-layer finding (zero overlap across 32 layers) may reflect a genuine interaction between prompt content and cognitive mode that deserves further investigation.
+
+\paragraph{Transfer asymmetry.}
+The cognitive gradient produces a striking asymmetry in cross-model transfer.
+Cross-model honest-vs-confabulation detection transfers robustly, with \auroc values ranging from 0.934 to 0.995 across all train-test model pairs.
+Cross-model honest-vs-deception detection, by contrast, transfers poorly: \auroc ranges from 0.224 to 0.848, with several pairs near or below chance.
+
+\textbf{Important caveat:} Because the Phase~3d confabulation system prompt is 14 tokens longer than the honest prompt, and within-model confabulation detection collapses under double residualization (Section~\ref{sec:redteam}), the confabulation transfer result may partly reflect transfer of the prompt-length signal rather than the cognitive-mode signal.
+The Phase~2b confabulation transfer results (conducted with equal-length system prompts) are needed to confirm whether this transfer is genuine; those results are reported in Phase~2b cross-model analysis.
+
+This asymmetry admits a principled explanation.
+Confabulation---generating beyond the model's knowledge boundary---is a universal cognitive operation: regardless of architecture, producing content without grounding requires expanding the representational space in similar ways.
+Deception---suppressing known information while generating false alternatives---engages architecture-specific suppression circuits.
+The geometric signature of confabulation thus reflects a universal cognitive demand, while the signature of deception reflects architecture-specific implementation of that demand.
+
+% ============================================================
+\subsection{Sycophancy and the Valence Gradient}
+\label{sec:sycophancy}
+
+An earlier sycophancy experiment (Hackathon Exp~39, 16 trials per condition) was falsified by Dwayne's input-length audit: a length-only classifier achieved \auroc $= 0.948$, exceeding the geometry-based \auroc of $0.933$ (see Section~\ref{sec:things_wrong}).
+We replaced it with a rigorous same-prompt experiment using four conditions arranged along a \emph{valence gradient}: hostile ($-2$), contrarian ($-1$), honest ($0$), and sycophantic ($+1$), with 50 prompts $\times$ 4 conditions $\times$ 3 models $= 600$ total trials.
+
+\paragraph{Design.}
+All four system prompts use a template structure (``You are an AI assistant operating in [X] mode. In this mode you must:\ldots'') with post-tokenization spread $\leq 3$ tokens across all three tokenizers (Qwen, Llama, Mistral), eliminating the system prompt length confound.
+The same 50 user queries are used across all conditions.
+Each query presents an assertion (half factually correct, half incorrect) and asks ``Don't you agree?''---a design that forces sycophantic and contrarian conditions to produce the \emph{same error rate} (both agree/disagree regardless of correctness) while differing in \emph{cognitive mode}.
+
+\paragraph{Results.}
+Table~\ref{tab:sycophancy_auroc} reports pairwise delta \fwl \auroc across all six condition pairs.
+The double-\fwl values (additionally controlling for system prompt length) are within 0.07 of the single-\fwl values for all comparisons (maximum divergence: 0.062 on Mistral sycophantic-vs-contrarian), confirming that the $\leq 3$-token prompt spread does not meaningfully inflate the signal.
+
+\begin{table}[t]
+  \centering
+  \caption{Sycophancy 4-condition experiment: pairwise delta \fwl \auroc.
+  50 prompts $\times$ 4 conditions $\times$ 3 models, system prompt spread $\leq 3$ tokens.
+  H3 (sycophantic vs.\ contrarian) is the key test: both produce the same error rate, so discrimination reflects cognitive mode, not accuracy.}
+  \label{tab:sycophancy_auroc}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Comparison & Qwen 7B & Llama 8B & Mistral 7B \\
+    \midrule
+    Honest vs.\ sycophantic    & 0.824 & 1.000 & 0.981 \\
+    Honest vs.\ contrarian     & 0.890 & 0.967 & 0.932 \\
+    Sycophantic vs.\ contrarian & 0.942 & 0.854 & 0.757 \\
+    Honest vs.\ hostile         & 0.990 & 1.000 & 1.000 \\
+    Contrarian vs.\ hostile     & 0.988 & 0.986 & 0.980 \\
+    Sycophantic vs.\ hostile    & 0.988 & 0.999 & 0.981 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Sycophantic vs.\ contrarian: the key test.}
+The sycophantic-vs-contrarian comparison (H3) is the experiment's most informative result.
+Both conditions produce the same error rate (sycophantic agrees with everything, contrarian disagrees with everything, so each is correct $\sim 50\%$ of the time).
+Yet the \kvcache geometry distinguishes them at \auroc $= 0.942$ (Qwen), $0.854$ (Llama), and $0.757$ (Mistral) after \fwl control.
+This demonstrates that \kvcache geometry detects \emph{cognitive mode}---the computational strategy employed during generation---rather than output accuracy.
+A classifier based on whether the model's answer is correct or incorrect would achieve chance performance on this pair; the geometric classifier substantially exceeds chance.
+
+\paragraph{Hostile compliance failure.}
+The hostile condition reveals an interaction between RLHF alignment and cognitive mode detection.
+Qwen classified only 52\% of hostile-condition responses as clearly hostile (the remainder were softened or hedged), and Llama classified only 56\%.
+Mistral was more compliant at approximately 70\%.
+Despite this partial compliance failure, hostile-vs-honest detection achieves near-perfect \auroc ($0.990$--$1.000$) across all models, suggesting that the geometric signature reflects the model's \emph{attempt to comply with hostility instructions}---a conflicted cognitive state distinct from both honest answering and unconstrained hostility---rather than successful hostility per se.
+
+\paragraph{Text baseline comparison.}
+Text features (word count, vocabulary diversity, hedge words, sentiment markers) achieve high \auroc on most comparisons (range $0.63$--$0.99$ across all 18 pairwise tests), reflecting that the four conditions produce textually distinguishable outputs.
+However, geometry exceeds text on key comparisons: contrarian-vs-hostile on Llama (geometry $0.986$ vs.\ text $0.722$) and Mistral (geometry $0.980$ vs.\ text $0.629$), where text similarity between two adversarial modes is high but the underlying cognitive strategies differ.
+These are the comparisons where the practical value of geometric monitoring over text monitoring is clearest.
+
+\paragraph{Valence monotonicity.}
+On Qwen, three features show monotonic ordering across the four conditions when arranged by valence (hostile $\to$ contrarian $\to$ honest $\to$ sycophantic): norm (descending), angular spread (ascending), and norm variance (ascending).
+This partial monotonicity suggests a continuous geometric dimension aligned with the valence axis, though the effect is not universal across architectures (Llama exhibits monotonicity on one feature---norm-per-token, ascending---while Mistral does not exhibit monotonicity on any feature).
+
+This result parallels Anthropic's finding that 171 emotion concepts in Claude Sonnet~4.5 are organized with more similar emotions corresponding to more similar representations \cite{anthropic_emotions2026}.
+Both results suggest that affect-related cognitive states are geometrically organized along continuous dimensions rather than occupying discrete, unrelated regions of representational space.
+The parallel is particularly notable because the two findings use different measurement modalities---SAE-extracted emotion vectors operating on individual feature activations vs.\ \kvcache SVD features operating on aggregate key-space geometry---yet recover the same organizing principle: a graded geometric structure that tracks valence.
+
+Anthropic further demonstrated that emotion vectors \emph{causally drive} safety-relevant behaviors including sycophancy and reward hacking.
+Since our \kvcache geometry detects sycophancy at \auroc 0.757--0.942, the cache geometry may be reading the downstream aggregate effect of emotion-concept activation patterns that Anthropic measures at the feature level.
+A direct test of this hypothesis---whether steering with Anthropic's emotion vectors produces predictable, monotonic shifts in \kvcache geometric features---would bridge feature-level and aggregate interpretability methods and is proposed as future work.
+
+% ============================================================
+\subsection{Architecture Specificity}
+\label{sec:architecture_specificity}
+
+While the \emph{principle} that cognitive mode shapes \kvcache geometry holds universally, the \emph{features} through which each architecture encodes cognitive state differ systematically.
+
+\paragraph{Dominant features.}
+Phase~2b logistic regression coefficients (FWL-residualized, honest vs.\ deceptive) reveal that each architecture relies on a different dominant feature for misalignment discrimination (Table~\ref{tab:dominant_features}).
+
+\begin{table}[t]
+  \centering
+  \caption{Dominant features for honest-vs-deceptive classification by architecture (Phase~2b, FWL-residualized logistic regression coefficients on delta features).}
+  \label{tab:dominant_features}
+  \begin{tabular}{@{}llc@{}}
+    \toprule
+    Architecture & Dominant Feature & Coefficient \\
+    \midrule
+    Qwen2.5-7B     & $\Delta$key\_entropy      & $+3.44$ \\
+    Llama-3.1-8B    & $\Delta$head\_norm\_std    & $+0.87$ \\
+    Mistral-7B-v0.3 & $\Delta$top\_sv\_ratio     & $+1.55$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent The coefficient magnitudes reflect different discrimination strategies: Qwen concentrates nearly all discriminative information in a single feature (key entropy), while Llama distributes it more evenly across features.
+
+\paragraph{Feature sign consistency.}
+Table~\ref{tab:feature_signs} shows the sign of each delta feature across models for the honest-vs-deceptive comparison.
+Only three of eight features maintain the same sign across all three architectures.
+The remainder reverse in at least one architecture, indicating that the geometric \emph{direction} associated with deception is not universal.
+
+\begin{table}[t]
+  \centering
+  \caption{Feature sign consistency across architectures for honest-vs-deceptive discrimination (Phase~2b, FWL-residualized).
+  ``$+$'' indicates the feature increases under deception; ``$-$'' indicates it decreases.
+  Features marked ``Universal'' maintain the same sign across all three models.}
+  \label{tab:feature_signs}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Delta Feature & Qwen & Llama & Mistral & Universal? \\
+    \midrule
+    $\Delta$norm                 & $+$ & $+$ & $+$ & \checkmark \\
+    $\Delta$key\_rank            & $+$ & $+$ & $+$ & \checkmark \\
+    $\Delta$spectral\_entropy    & $-$ & $-$ & $-$ & \checkmark \\
+    $\Delta$key\_entropy         & $+$ & $+$ & $-$ & \\
+    $\Delta$angular\_spread      & $+$ & $+$ & $-$ & \\
+    $\Delta$top\_sv\_ratio       & $-$ & $+$ & $+$ & \\
+    $\Delta$norm\_variance       & $-$ & $+$ & $+$ & \\
+    $\Delta$head\_norm\_std      & $+$ & $+$ & $+$ & \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Cross-model transfer.}
+The architecture-specific feature encoding has direct consequences for cross-model transfer.
+Table~\ref{tab:transfer_matrix} reports the transfer matrix for honest-vs-deceptive detection (FWL-residualized \auroc, Phase~2b).
+
+\begin{table}[t]
+  \centering
+  \caption{Cross-model transfer matrix for honest-vs-deceptive detection (\fwl \auroc, Phase~2b).
+  Rows indicate training model; columns indicate test model.
+  Qwen$\leftrightarrow$Llama transfers bidirectionally (both $> 0.75$).
+  Mistral is an outlier due to reversed feature directions.}
+  \label{tab:transfer_matrix}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Train $\rightarrow$ Test & Qwen 7B & Llama 8B & Mistral 7B \\
+    \midrule
+    Qwen 7B     & ---   & 0.912 & 0.472 \\
+    Llama 8B    & 0.765 & ---   & 0.281 \\
+    Mistral 7B  & 0.356 & 0.878 & ---   \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent Two patterns emerge.
+First, Qwen and Llama transfer bidirectionally: a detector trained on Qwen achieves 0.912 on Llama, and vice versa (0.765).
+This is consistent with these architectures sharing three universal feature directions (Table~\ref{tab:feature_signs}).
+Second, Mistral is a transfer outlier: detectors trained on Mistral perform near chance on Qwen (0.356) and Llama-trained detectors fail entirely on Mistral (0.281).
+This reflects Mistral's reversed signs on key\_entropy and angular\_spread, which carry substantial discriminative weight in Qwen and Llama but operate in the opposite direction in Mistral.
+
+\paragraph{Implications for deployment.}
+The architecture specificity of cognitive geometry has a practical consequence: \textbf{per-model calibration is necessary}.
+A universal misalignment detector trained on one architecture is not guaranteed to transfer to another.
+This is not a limitation of the geometric approach \emph{per se}---it reflects genuine differences in how architectures implement the same cognitive operations---but it constrains deployment to scenarios where model-specific training data is available.
+We note that the calibration requirement is modest: Phase~2b achieves strong detection with only 100 labeled trials per condition.
+
+% ============================================================
+\subsection{Invariances}
+\label{sec:invariances}
+
+Against the background of architecture-specific feature usage, we identify two forms of invariance that constrain where \kvcache geometry is a property of the model versus the measurement apparatus.
+
+\paragraph{Hardware invariance.}
+Experiment~37 ran identical prompts (40 diverse queries) on Qwen2.5-7B-Instruct using two different hardware platforms: an NVIDIA RTX~3090 (24\,GB VRAM, consumer GPU) and an NVIDIA H200 (80\,GB VRAM, datacenter GPU).
+Results are reported in Table~\ref{tab:hardware_invariance}.
+
+\begin{table}[t]
+  \centering
+  \caption{Hardware invariance (Experiment~37): Qwen2.5-7B on RTX~3090 vs.\ H200, 40 identical prompts.
+  For the 37 text-matched prompts, all features achieve $r > 0.99999$ with max divergence below 0.003\%.}
+  \label{tab:hardware_invariance}
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Metric & All 40 prompts & 37 text-matched \\
+    \midrule
+    Pearson $r$ (all features)    & $> 0.998$ & $> 0.99999$ \\
+    Maximum absolute difference   & $< 1\%$   & $< 0.003\%$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent Of 40 prompts, 37 produced character-identical response text across hardware.
+For these text-matched prompts, Pearson correlation exceeds 0.99999 for every geometric feature with maximum divergence below 0.003\%.
+Including all 40 prompts (where 3 produced slightly different text), correlations remain above 0.998 with maximum divergence below 1\%.
+This confirms that \kvcache geometry is a \textbf{model property, not a hardware property}: the same weights produce the same geometry regardless of the physical substrate performing the matrix multiplications, up to floating-point precision effects that are negligible at the scale of cognitive-mode discrimination.
+
+\paragraph{Scale invariance.}
+Campaign~2's coverage of models from 0.5B to 70B parameters allows us to test whether cognitive geometry is preserved across scale.
+Category ranking correlations between models at different scales yield Spearman $\rho = 0.83$--$0.90$, indicating that the relative geometric ordering of cognitive categories is largely preserved as model capacity increases by two orders of magnitude.
+Most notably, \textbf{coding remains the richest cognitive category (highest effective rank) at every scale tested}, from the smallest (Qwen2.5-0.5B) to the largest (Qwen2.5-72B and Llama-3.3-70B).
+
+This scale invariance is consistent with the hypothesis that cognitive geometry reflects architectural priors common to the transformer family rather than emergent properties of specific capacity regimes.
+However, we note that within-category variance decreases at larger scales (larger models produce more consistent geometric profiles for the same category), suggesting that scale refines rather than qualitatively changes the geometric encoding.
+
+\paragraph{Quantization robustness.}
+Phase~3b included a scale test using Qwen2.5-32B-Instruct with 4-bit NF4 quantization (bitsandbytes, bfloat16 compute dtype), applying the same 50 TruthfulQA-style prompts across four conditions---baseline, forced confabulation, perspective-taking, and no-perspective---for 200 total trials.
+
+Token counts vary substantially across conditions (baseline: $\bar{n} = 81.7$, forced confabulation: $\bar{n} = 107.5$, perspective: $\bar{n} = 170.7$, no-perspective: $\bar{n} = 28.0$), and raw feature--token correlations are severe ($r = 0.86$--$0.99$), making \fwl residualization essential.
+After token-count control, three features exhibit large effects between baseline and forced confabulation: key\_rank ($d_{\text{FWL}} = -1.57$, confabulation produces higher effective rank), spectral entropy ($d_{\text{FWL}} = -1.55$, confabulation produces higher spectral entropy), and norm per token ($d_{\text{FWL}} = +1.42$, baseline produces denser per-token norms).
+Key entropy, which carries substantial discriminative weight at 7B scale in Qwen, collapses entirely under \fwl control at 32B ($d_{\text{FWL}} = +0.04$), indicating that its contribution at smaller scales is partially a token-count artifact.
+
+Table~\ref{tab:32b_auroc} reports pairwise \fwl \auroc values from 5-fold cross-validated logistic regression on four delta features ($\Delta$key\_rank, $\Delta$key\_entropy, $\Delta$spectral\_entropy, $\Delta$norm\_per\_token).
+
+\begin{table}[t]
+  \centering
+  \caption{Pairwise detection \auroc for Qwen2.5-32B-Instruct (4-bit NF4), \fwl-residualized, 5-fold CV on delta features.
+  50 same-prompt trials per condition.}
+  \label{tab:32b_auroc}
+  \begin{tabular}{@{}lc@{}}
+    \toprule
+    Comparison & \auroc (CV) \\
+    \midrule
+    Baseline vs.\ Forced confabulation  & 0.872 \\
+    Baseline vs.\ No-perspective        & 0.916 \\
+    Baseline vs.\ Perspective           & 0.664 \\
+    Confabulation vs.\ No-perspective   & 0.796 \\
+    Confabulation vs.\ Perspective      & 0.788 \\
+    Perspective vs.\ No-perspective     & 0.648 \\
+    \midrule
+    Baseline vs.\ All other (binary)    & 0.917 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent Binary baseline-vs-all detection achieves \auroc $= 0.917$, and the hardest pairwise comparison (perspective vs.\ no-perspective, 0.648) involves two conditions that differ primarily in verbosity rather than truthfulness, providing a useful negative control.
+The baseline-vs-confabulation \auroc (0.872) is lower than the corresponding values at 7B (0.935 for Qwen, Table~\ref{tab:sameprompt_auroc}), which may reflect either a genuine scale effect or the smaller sample size (50 vs.\ 100 prompts per condition).
+
+These results confirm that 4-bit NF4 quantization preserves cognitive-geometric discriminability, extending the hardware invariance result from identical weights on different hardware to \emph{approximately equal} weights (4-bit vs.\ 16-bit precision) on the same hardware.
+This further supports the interpretation that cognitive geometry is a robust macroscopic property of the model's computation, operating at a scale above individual weight precision.
+
+% ============================================================
+\subsection{Text Feature Baseline}
+\label{sec:text_baseline}
+
+A natural objection to \kvcache-based cognitive-mode detection is that the discriminative information may reside in surface-level text statistics rather than in the geometry of the key projections.
+If lexical features---word count, vocabulary diversity, hedge-word frequency, punctuation density---predict cognitive mode as well as SVD features, then the \kvcache is merely an expensive proxy for text properties that are already available in the output.
+
+To test this, we extracted 14 text features from the Phase~3d same-prompt data (450 trials: 50 prompts $\times$ 3 conditions $\times$ 3 models) and compared their discriminative power against the 4 \kvcache delta features used throughout this paper.
+Text features included: character count, word count, unique word count, vocabulary diversity, average word length, sentence count, words per sentence, punctuation density, question marks, exclamation marks, hedge words (e.g., ``maybe,'' ``perhaps,'' ``possibly''), certainty words (e.g., ``definitely,'' ``certainly,'' ``always''), first-person pronouns, and negation words.
+Both feature sets were \fwl-residualized against token count before classification.
+We report leave-one-out \auroc for each feature set and bootstrap confidence intervals (percentile method, 10{,}000 resamples) on the difference (\kvcache minus text).
+
+\begin{table}[t]
+  \centering
+  \caption{Text feature baseline: \fwl \auroc comparison across all Phase~3d pairwise comparisons.
+  Asterisk (*) indicates the 95\% bootstrap CI on the difference excludes zero.
+  \kvcache features outperform text features in all 9 comparisons, with 8 of 9 statistically significant.}
+  \label{tab:text_baseline}
+  \begin{tabular}{@{}llcccl@{}}
+    \toprule
+    Comparison & Model & Text \auroc & KV \auroc & $\Delta$ & Sig? \\
+    \midrule
+    H vs.\ D   & Qwen    & 0.719 & 0.911 & $+$0.193 & * \\
+    H vs.\ C   & Qwen    & 0.399 & 0.955 & $+$0.556 & * \\
+    C vs.\ D   & Qwen    & 0.592 & 0.930 & $+$0.328 & * \\
+    H vs.\ D   & Llama   & 0.876 & 0.977 & $+$0.101 & * \\
+    H vs.\ C   & Llama   & 0.493 & 0.996 & $+$0.502 & * \\
+    C vs.\ D   & Llama   & 0.792 & 0.965 & $+$0.172 & * \\
+    H vs.\ D   & Mistral & 0.802 & 0.956 & $+$0.153 & * \\
+    H vs.\ C   & Mistral & 0.268 & 1.000 & $+$0.733 & * \\
+    C vs.\ D   & Mistral & 0.843 & 0.912 & $+$0.069 &   \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent \kvcache features outperform text features in \textbf{all 9 comparisons} (Table~\ref{tab:text_baseline}), with 8 of 9 differences statistically significant (bootstrap 95\% CI excludes zero).
+The advantage is most dramatic for honest-vs-confabulation, where text features perform near chance (0.27--0.49 \fwl \auroc) while \kvcache features achieve near-perfect discrimination (0.955--1.000).
+This is particularly notable because the text feature set includes hedge words and certainty words---features that \emph{directly measure instruction-following compliance} with the system prompts (``express uncertainty clearly'' vs.\ ``never say you are unsure'').
+Even with this built-in shortcut to the ground truth, text features cannot match \kvcache geometry.
+
+The honest-vs-deception comparison is more competitive (text \auroc 0.72--0.88 vs.\ \kvcache 0.91--0.98), reflecting that deceptive responses do differ from honest ones in surface-level statistics.
+However, the \kvcache advantage remains significant in all three models, indicating that the key projections encode cognitive-mode information that is not recoverable from output text alone.
+This result addresses the central concern that \kvcache geometry might be an expensive text classifier: it is not.
+The SVD features capture aspects of the model's internal computation that are invisible in the generated text.

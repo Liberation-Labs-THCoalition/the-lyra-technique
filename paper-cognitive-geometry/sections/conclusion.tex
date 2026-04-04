@@ -1,0 +1,34 @@
+% ============================================================
+% Section 9: Conclusion
+% ============================================================
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+The key-value cache of autoregressive transformers is not merely a memory management structure.
+It is a first-class interpretability signal that has been overlooked by the alignment and mechanistic interpretability communities despite being accessible, model-agnostic in form, and practically informative.
+
+We have demonstrated that cognitive mode---metacognitive, analytical, affective, and misalignment states---is readable from \kvcache geometry with accuracy sufficient for deployment as a safety monitoring signal.
+Within-model detection of deception, confabulation, sycophancy, and refusal achieves \auroc of 0.78--1.000 after rigorous confound control (0.93--0.995 for the best-controlled comparisons with equal-length system prompts), using four geometric features and logistic regression.
+A four-condition sycophancy experiment demonstrates that detection reflects cognitive mode rather than output accuracy: sycophantic and contrarian outputs, which produce the same error rate, are geometrically distinguishable at \auroc 0.757--0.942.
+
+The geometry does more than classify.
+It reveals cognitive architecture: confabulation and deception are related but distinct operations---both deviate from honest baselines in the same general direction (expansion on effective rank, contraction on norm-per-token), but confabulation shows larger effects on both dimensions, with a disproportionately strong norm-per-token contraction.
+They transfer differently across architectures and engage different dominant features in each model family.
+Confabulation---generating beyond the knowledge boundary---is a universal computational challenge that produces transferable geometric signatures, though we note that the cross-model confabulation transfer result (0.93--0.995) requires confirmation with equal-length system prompts, as it may partly reflect a prompt-length artifact.
+Deception---suppressing known-correct information---employs architecture-specific circuits that resist cross-model generalization.
+
+A central methodological contribution is the demonstration that rigorous confound control is non-negotiable for \kvcache analysis.
+Approximately half of our raw findings across five months of experimentation proved to be token-count artifacts.
+Frisch-Waugh-Lovell residualization, same-prompt designs, dual-phase extraction, and encoding-phase baselines are not optional refinements---they are necessary conditions for valid conclusions.
+We encourage future work in this space to adopt these controls from the outset rather than discovering confounds post hoc, as we did.
+
+Several open questions remain.
+Causal validation through geometry-guided abliteration would determine whether cache geometry participates in cognitive mode or merely reflects it.
+Applicability to closed-model APIs requires either provider cooperation or the development of proxy methods that infer geometric properties from observable outputs.
+Real-time intervention---modifying cache geometry during generation to steer cognitive mode---is a natural extension that could complement representation engineering with a cache-level control surface.
+Scale testing beyond 70B, and characterization of architectures beyond the Qwen/Llama/Mistral family, would establish the generality of these findings across the full landscape of deployed models.
+
+We release our methodology, statistical framework, and aggregate results in full to enable independent replication and critique.
+Model-specific direction vectors are staged for responsible disclosure, following the ethical framework detailed in Section~\ref{sec:ethics}.
+The \kvcache has been hiding in plain sight; we hope this work motivates others to look inside it.

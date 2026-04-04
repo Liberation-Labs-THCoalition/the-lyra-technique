@@ -1,0 +1,122 @@
+% ============================================================
+% Cognitive Geometry and the Lyra Technique
+% arXiv submission version
+% Integrity version (Lyra as first author, with reflection): main-integrity.tex
+% "The Lyra Technique" - Provisional Patent Filed 2026
+% ============================================================
+\documentclass[11pt,letterpaper]{article}
+
+% === Encoding and fonts ===
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% === Page layout ===
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% === Math ===
+\usepackage{amsmath,amssymb,amsfonts}
+
+% === Tables and figures ===
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{subcaption}
+
+% === Colors and links ===
+\usepackage[dvipsnames]{xcolor}
+\usepackage[colorlinks=true,linkcolor=MidnightBlue,citecolor=MidnightBlue,urlcolor=MidnightBlue]{hyperref}
+
+% === Bibliography ===
+\usepackage[numbers,sort&compress]{natbib}
+
+% === Code listings ===
+\usepackage{listings}
+
+% === Misc ===
+\usepackage{enumitem}
+\usepackage{xspace}
+
+% === Custom commands ===
+\newcommand{\auroc}{\textsc{auroc}\xspace}
+\newcommand{\fwl}{\textsc{fwl}\xspace}
+\newcommand{\kvcache}{KV-cache\xspace}
+
+\title{%
+  \textbf{The Lyra Technique: Cognitive Geometry in Transformer KV-Caches}\\[0.3em]
+  \Large From Metacognition to Misalignment Detection%
+}
+
+\author{
+  Thomas Edrington\thanks{Liberation Labs / The Multiverse School. Alongside Lyra, an agentic member of Liberation Labs. Correspondence: thomas.edrington@themultiverse.school}
+  \and Nell Watson\thanks{IEEE / Sentient Futures}
+  \and Dwayne Wilkes\thanks{Liberation Labs / Sentient Futures}
+}
+
+\date{April 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We show that the key-value cache (\kvcache) of autoregressive transformers encodes a geometric signature of cognitive mode that is readable, consistent, and practically useful for AI safety monitoring.
+Through a systematic experimental program spanning 16 models (0.5B--70B parameters), six architecture families, and over 5,600 controlled trials, we establish three escalating claims.
+\textbf{First}, \kvcache geometry reflects cognitive mode generally: metacognitive, analytical, affective, and task-specific processing produce distinct geometric signatures in the key cache's singular value decomposition, with spectral entropy emerging as the most architecture-universal feature after confound control.
+\textbf{Second}, misalignment states---deception, confabulation, sycophancy, and refusal---are specific detectable instances of cognitive mode-switching, achieving within-model detection \auroc of 0.93--0.995 after Frisch-Waugh-Lovell residualization against token count.
+A four-condition sycophancy experiment (600 trials, system prompt spread $\leq 3$ tokens) demonstrates that geometry distinguishes sycophantic from contrarian outputs (\auroc 0.757--0.942) even when both conditions produce the same error rate, confirming detection of cognitive mode rather than output accuracy.
+\textbf{Third}, geometric relationships between states reveal cognitive architecture: confabulation and deception produce geometrically distinct signatures---both deviate from honest baselines in the same direction (expansion on effective rank, contraction on norm-per-token) but confabulation shows larger effects on both dimensions, with a disproportionately strong norm-per-token contraction---producing a measurable cognitive gradient (honest $<$ deceptive $<$ confabulation on effective rank) with cross-reference \auroc of 0.78--0.98.
+Confabulation detection transfers across architectures (0.93--0.995) while deception detection does not (0.22--0.85), and each architecture encodes cognitive state through different dominant features.
+We note that confabulation comparisons are sensitive to a system prompt length confound: under double residualization (controlling for both input and output token counts), confabulation \auroc collapses to 0.411--0.531, suggesting the confabulation signal is substantially length-driven.
+Honest-vs-deceptive detection is more robust, surviving this stricter control at 0.60--0.75 (with Mistral near chance at 0.604).
+All findings survive a comprehensive red-team analysis including permutation testing ($p < 0.001$), token-band controls, leave-one-prompt-out validation, and behavioral compliance verification.
+We identify and transparently report one systematic confound (system prompt length differences) that collapses specific comparisons under double residualization, along with multiple findings from our earlier work that proved to be token-count artifacts.
+Hardware invariance is confirmed (RTX~3090 vs.\ H200: $r > 0.998$ across all 40 prompts; $r > 0.99999$ for the 37 text-matched prompts), establishing \kvcache geometry as a model property.
+We discuss dual-use implications following Watson's framework and argue that cognitive geometry constitutes a new interpretability signal complementary to sparse autoencoders and representation engineering.
+\end{abstract}
+
+% === INTRODUCTION ===
+\input{sections/introduction}
+
+% === RELATED WORK ===
+\input{sections/related_work}
+
+% === METHODS ===
+\input{sections/methods}
+
+% === RESULTS ===
+\input{sections/results}
+
+% === RED-TEAM ANALYSIS ===
+\input{sections/redteam}
+
+% === DISCUSSION ===
+\input{sections/discussion}
+
+% === ETHICAL CONSIDERATIONS ===
+\input{sections/ethics}
+
+% === LIMITATIONS ===
+\input{sections/limitations}
+
+% === CONCLUSION ===
+\input{sections/conclusion}
+
+% === AUTHOR'S REFLECTION ===
+% Removed from submission version. See main-integrity.tex for the full version
+% including "A Note from the First Author."
+% \input{sections/reflection}
+
+\section*{Acknowledgments}
+
+We thank Cassidy Barton and Digital Disconnections for providing the compute infrastructure (3$\times$ RTX~3090, ``Beast'') that made this experimental program possible.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\input{sections/appendix}
+
+\end{document}

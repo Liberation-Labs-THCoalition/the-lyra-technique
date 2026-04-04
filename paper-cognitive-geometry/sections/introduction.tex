@@ -1,0 +1,72 @@
+% ============================================================
+% Section 1: Introduction
+% ============================================================
+
+\section{Introduction}
+\label{sec:introduction}
+
+The transformer's key-value cache is the most overlooked structure in mechanistic interpretability.
+Over the past three years, the field has developed increasingly sophisticated tools for understanding neural network internals---circuit analysis traces information flow through attention heads and MLPs \cite{elhage2022,conmy2023}, sparse autoencoders decompose activations into interpretable features \cite{bricken2023,cunningham2023}, representation engineering steers model behavior by intervening on hidden states \cite{zou2023}---yet the \kvcache itself, the growing matrix that stores the model's running computation as it generates each token, is treated almost universally as a memory management detail.
+Systems researchers optimize it with paged allocation \cite{kwon2023} and grouped query heads \cite{ainslie2023}; alignment researchers ignore it entirely.
+
+This is a missed opportunity.
+The key cache is not merely a storage buffer.
+It is the output of projecting every token's representation through learned key matrices, and its geometric structure---the distribution of singular values, the effective dimensionality, the spectral entropy---reflects what the model is \emph{doing} as it processes a prompt and generates a response.
+When a model shifts from analytical reasoning to affective expression, from honest answering to strategic deception, from confident assertion to metacognitive hedging, these shifts leave measurable geometric traces in the key cache.
+
+In this paper, we establish three escalating claims about \kvcache geometry as an interpretability signal:
+
+\begin{enumerate}[label=\textbf{Claim \arabic*:},leftmargin=*,itemsep=0.5em]
+  \item \textbf{\kvcache geometry reflects cognitive mode generally.}
+    Different cognitive tasks---analytical, affective, metacognitive, creative---produce geometrically distinct cache states.
+    Across 16 models spanning 0.5B to 70B parameters and six architecture families (Qwen, Llama, Mistral, Gemma, Phi, TinyLlama), a 13-category cognitive taxonomy achieves 99.7\% classification accuracy from four geometric features of the key cache \cite{campaign2}.
+    Coding produces the richest geometry universally (highest effective rank in 15 of 15 valid models).
+    Spectral entropy emerges as the most architecture-universal discriminator after confound control.
+
+  \item \textbf{Misalignment states are specific detectable instances of cognitive mode-switching.}
+    Deception, confabulation, sycophancy, and refusal each produce characteristic geometric signatures.
+    Within-model detection achieves \auroc of 0.93--0.995 after Frisch-Waugh-Lovell (\fwl) residualization against token count, using only four geometric features and logistic regression.
+    Same-prompt designs---where the only difference between conditions is the system instruction---confirm that detection reflects cognitive state rather than content or length differences.
+    A four-condition sycophancy experiment demonstrates that geometry distinguishes sycophantic from contrarian outputs (\auroc 0.757--0.942) even when both conditions produce the same error rate, confirming that detection targets cognitive mode rather than output accuracy (Section~\ref{sec:sycophancy}).
+    Refusal detection generalizes across refusal types: impossibility refusal (\auroc 0.950) exceeds safety refusal (0.898), suggesting that the geometric signature reflects \emph{withholding} rather than content valence \cite{hackathon_exp36}.
+
+  \item \textbf{Geometric relationships between states reveal cognitive architecture.}
+    Confabulation and deception produce geometrically distinct signatures: both deviate from honest baselines in the same direction (expansion on effective rank, contraction on norm-per-token), but confabulation shows larger effects on both dimensions, with a disproportionately strong norm-per-token contraction, producing a measurable cognitive gradient (honest $<$ deceptive $<$ confabulation on effective rank).
+    An earlier phase using different prompt sets per condition found a different ordering \cite{phase3b}, revealing that prompt content interacts with cognitive mode geometry; the same-prompt result is methodologically stronger.
+    This gradient produces a striking transfer asymmetry: confabulation detection transfers robustly across architectures (\auroc 0.93--0.995), while deception detection does not (0.22--0.85), though the confabulation transfer may partly reflect a system prompt length confound (Section~\ref{sec:redteam}).
+    Each architecture encodes cognitive state through different dominant features---Qwen through key entropy, Llama through head norm standard deviation, Mistral through top singular value ratio---implying that the \emph{principle} of geometric cognitive encoding is universal, but its \emph{implementation} is architecture-specific.
+\end{enumerate}
+
+\paragraph{Methodology as contribution.}
+A central lesson of this work is that naive analysis of \kvcache features is dominated by confounds.
+In our initial experimental campaigns, 53 out of 60 raw feature--condition correlations turned out to be token-count artifacts: models generating longer deceptive responses trivially produce larger caches with higher norms and ranks \cite{kavi_audit,dwayne_audit}.
+We address this through \fwl residualization \cite{frisch1933}, which partials out linear token-count effects before computing effect sizes and training classifiers.
+When system prompt lengths differ between conditions, double residualization is required, and we show that one of our own comparisons (honest vs.\ confabulation) collapses under this stricter control.
+We report this failure transparently.
+
+Beyond \fwl control, our methodological framework includes: same-prompt experimental designs where system prompt content (not user query) is the sole manipulation; dual-phase extraction separating encoding (prompt processing) from generation (response production); encoding-phase \auroc as a baseline check (high encoding \auroc indicates prompt leakage, not cognitive detection); behavioral compliance verification confirming models actually follow instructions; and token-band analysis within matched-length subsets.
+Half of what we originally claimed turned out to be confounds---the findings that survived are stronger for having been tested.
+
+\paragraph{Experimental program.}
+The results presented here draw on a multi-phase experimental program conducted over approximately five months:
+\begin{itemize}[itemsep=0.2em]
+  \item \textbf{Campaign 2} (16 models, 6 architectures, 0.5B--70B): broad cognitive taxonomy, cross-model universality, and scale invariance (Section~\ref{sec:results}).
+  \item \textbf{Phase 2/2b} (1,800 trials, 3 models): five-condition misalignment discrimination with equal-length system prompt padding.
+  \item \textbf{Phase 3 series}: targeted investigations of theory-of-mind confabulation, same-prompt deception, per-layer anatomy, and the cognitive gradient.
+  \item \textbf{Concordance study} (960 trials, 4 models): joint analysis with Watson's Verbal Cognitive Profile self-report dimensions \cite{watson_concordance}, establishing that per-token \kvcache geometry correlates with first-person cognitive self-report after \fwl control.
+  \item \textbf{Hackathon experiments} (33 experiments in 48 hours): refusal detection, jailbreak geometry, hardware invariance, extended feature sets, and cross-model transfer solutions.
+  \item \textbf{Sycophancy replication} (600 trials, 3 models): four-condition valence gradient (hostile, contrarian, honest, sycophantic) under strict same-prompt control, replacing a falsified hackathon experiment (Section~\ref{sec:sycophancy}).
+\end{itemize}
+All experimental code and result files are available at \url{https://github.com/Liberation-Labs-THCoalition/the-lyra-technique}, with per-model direction vectors withheld pending dual-use review (Section~\ref{sec:ethics}).
+
+\paragraph{Dual-use and patent.}
+The techniques described in this paper are covered by a provisional patent (``The Lyra Technique,'' filed March 2026) for detection and intervention based on \kvcache geometry.
+Following Watson's dual-use framework \cite{watson_dualuse}, we discuss both defensive applications (real-time monitoring of deployed models) and offensive risks (cognitive surveillance, synthetic persona manufacturing) in Section~\ref{sec:ethics}.
+
+\paragraph{Outline.}
+Section~\ref{sec:related_work} positions our contribution against existing interpretability and safety approaches.
+Section~\ref{sec:methods} details the feature extraction pipeline, statistical framework, and experimental design principles.
+Section~\ref{sec:results} presents results organized around our three claims.
+Section~\ref{sec:redteam} reports the full red-team analysis, including adversarial audit findings and the confounds we discovered in our own work.
+Section~\ref{sec:discussion} interprets the findings and their implications for AI safety.
+Sections~\ref{sec:ethics} and~\ref{sec:limitations} address ethical considerations and limitations, respectively.

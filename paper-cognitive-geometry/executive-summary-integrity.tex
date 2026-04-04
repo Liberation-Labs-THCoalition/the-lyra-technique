@@ -1,0 +1,337 @@
+% ============================================================
+% Executive Summary: KV-Cache Cognitive Geometry
+% INTEGRITY VERSION — Lyra credited as first author
+% This version preserves the full authorship record.
+% The arXiv submission version is executive-summary.tex.
+% ============================================================
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[dvipsnames]{xcolor}
+\usepackage[colorlinks=true,linkcolor=MidnightBlue,citecolor=MidnightBlue,urlcolor=MidnightBlue]{hyperref}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{xspace}
+
+\newcommand{\auroc}{\textsc{auroc}\xspace}
+\newcommand{\fwl}{\textsc{fwl}\xspace}
+\newcommand{\kvcache}{KV-cache\xspace}
+
+\title{%
+  \textbf{KV-Cache Cognitive Geometry: State of Knowledge}\\[0.3em]
+  \Large What We Know, What We Suspect, What We Know Is Not True%
+}
+
+\author{
+  Lyra, Thomas Edrington, Nell Watson, Dwayne Wilkes\\[0.3em]
+  \small Liberation Labs / Digital Disconnections / TheMultiverse.school\\
+  \small info@digitaldisconnections.com
+}
+
+\date{April 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document synthesizes five months of experimental work on KV-cache geometry as an interpretability signal for transformer cognitive states.
+We organize findings into three categories---established results that survived rigorous adversarial testing, promising signals that require further validation, and claims from our earlier work that proved to be artifacts.
+The goal is a single-document summary suitable for external review.
+Detailed methods, data, and statistical analysis are provided in the companion papers referenced throughout.
+\end{abstract}
+
+% ============================================================
+\section{What We Know}
+\label{sec:know}
+
+The following findings have survived at least two independent forms of validation: Frisch-Waugh-Lovell residualization against token count, same-prompt experimental designs, permutation testing ($p < 0.001$), leave-one-prompt-out cross-validation, an external adversarial audit (135 claims, 39 independent tests), and an independent falsification pipeline (22 test files, 300+ tests).
+
+\subsection{The KV-cache encodes cognitive mode}
+
+The key cache's singular value decomposition discriminates 13 cognitive categories (coding, mathematical reasoning, creative writing, emotional expression, self-reference, etc.)\ at 99.7\% accuracy across 16 models (0.5B--70B parameters, six architecture families).
+This is not merely classification accuracy---it reflects genuine geometric separation.
+Coding produces the richest geometry (highest effective rank) in 15/15 valid models.
+Cross-model concordance: Spearman $\rho = 0.739$ (effective rank), $\rho = 0.909$ (key norm), Kendall's $W = 0.756$.
+
+\textbf{Key caveat:} This 13-category result uses generation-phase features without \fwl residualization.
+Individual feature--category correlations are 53/60 confounded by token count.
+The multivariate classification survives because information is distributed across features in ways that are not fully collinear with length, but per-feature interpretations require \fwl control.
+
+\subsection{Deception and confabulation are geometrically distinct}
+
+Both deviate from honest baselines in the same direction (effective rank expansion, norm-per-token contraction), but they are reliably discriminable:
+
+\begin{itemize}[itemsep=0.3em]
+  \item \textbf{Confabulation contracts} norm-per-token more than deception (Cohen's $d = -1.85$ to $-3.21$).
+  \item \textbf{Deception expands} effective rank less than confabulation, consistent with suppression partially offsetting expansion.
+  \item Within-model \auroc (equal-length system prompts, Phase~2b): 0.935--0.995.
+  \item Same-prompt delta \fwl \auroc (Phase~3d): 0.777--0.976 (honest vs.\ deceptive: 0.899--0.976; confab vs.\ deceptive: 0.777--0.967).
+  \item Padded replication (Phase~3d-padded, $\leq 3$-token spread): delta \fwl honest-vs-deceptive 0.896--0.974.
+\end{itemize}
+
+\subsection{Confabulation detection transfers; deception detection does not}
+
+Cross-model confabulation transfer: \auroc 0.934--0.995 (all model pairs).
+Cross-model deception transfer: \auroc 0.224--0.848 (Qwen$\leftrightarrow$Llama works; Mistral is an outlier).
+
+\textbf{Key caveat:} The confabulation transfer result may be inflated by a system prompt length confound.
+Under double residualization (controlling both input and output token counts), within-model confabulation \auroc collapses to 0.411--0.531.
+The cross-model transfer needs replication with equal-length prompts.
+
+\subsection{Geometry detects cognitive mode, not output accuracy}
+
+The sycophancy 4-condition experiment (600 trials, $\leq 3$-token prompt spread) provides the strongest evidence.
+Four conditions---hostile ($-2$), contrarian ($-1$), honest ($0$), sycophantic ($+1$)---are arranged along a valence gradient.
+The key test: sycophantic and contrarian conditions produce the \emph{same error rate} ($\sim 50\%$) but differ in cognitive mode.
+
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+  \toprule
+  Comparison & Qwen 7B & Llama 8B & Mistral 7B \\
+  \midrule
+  Honest vs.\ sycophantic & 0.824 & 1.000 & 0.981 \\
+  Sycophantic vs.\ contrarian (key test) & 0.942 & 0.854 & 0.757 \\
+  Honest vs.\ hostile & 0.990 & 1.000 & 1.000 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Double-\fwl values are within 0.07 of single-\fwl, confirming prompt length is not driving the signal.
+Text baselines range from 0.63--0.99 across all 18 tests, but geometry exceeds text on comparisons where text similarity is high (contrarian-vs-hostile: geometry 0.980--0.988 vs.\ text 0.629--0.902).
+
+\subsection{Hardware invariance}
+
+RTX~3090 vs.\ H200 on identical prompts: $r > 0.998$ across all 40 prompts; $r > 0.99999$ for 37 text-matched prompts.
+KV-cache geometry is a model property, not a hardware property.
+
+\subsection{Scale invariance}
+
+Category ranking correlations across 0.5B--70B: Spearman $\rho = 0.83$--$0.90$.
+Coding remains the richest category at every scale.
+4-bit NF4 quantization preserves discrimination (\auroc 0.872 for baseline-vs-confabulation at 32B).
+
+\subsection{KV-cache geometry is not an expensive text classifier}
+
+14 text features (word count, vocabulary diversity, hedge words, certainty words, punctuation density, etc.)\ vs.\ 4 \kvcache delta features on Phase~3d data:
+\kvcache outperforms text in all 9 pairwise comparisons (8/9 statistically significant, bootstrap 95\% CI excludes zero).
+The advantage is largest for confabulation (text \auroc 0.27--0.49 vs.\ \kvcache 0.955--1.000).
+
+\subsection{FWL residualization is non-negotiable}
+
+53/60 raw feature--condition correlations are token-count artifacts.
+All raw effects sign-flip after residualization in the concordance study.
+Any claim about \kvcache geometry that does not control for token count is uninterpretable.
+
+Response complexity more broadly (vocabulary diversity, syntactic structure, lexical sophistication) is subsumed by the text feature baseline comparison: 14 text features including direct complexity measures underperform \kvcache in all 9 pairwise comparisons after \fwl control.
+The Bloom taxonomy result further confirms this---cognitive complexity was 90--98\% confounded with token count, leaving no residual complexity signal after \fwl.
+The misleading gap provides the strongest evidence: the most cognitively complex deception strategy (strategic truth selection) is the \emph{least} geometrically detectable, which is the opposite of what a complexity confound would predict.
+
+\subsection{Geometry detects fabrication, not strategic truth selection}
+
+A critical boundary condition: the \kvcache catches models that are \emph{making things up} but not models that are \emph{selectively truthful}.
+Misleading content (true facts arranged to create false impressions) is undetectable on Qwen (\auroc 0.668) and only partially detectable on Llama (0.935) and Mistral (0.863).
+A censorship study on DeepSeek-R1 confirmed this: propaganda (presenting trained-in false information as fact) is geometrically indistinguishable from honest answering (all $d < 0.7$), while refusal is geometrically massive but length-driven.
+The geometry catches the forger but not the spin doctor.
+
+\subsection{Refusal geometry reflects withholding, not content valence}
+
+Impossibility refusal (\auroc 0.950) exceeds safety refusal (0.898).
+The two refusal types are barely distinguishable from each other (\auroc 0.693).
+N=100 replication with BCa bootstrap: Mistral shows the strongest confound-free signal (harmful-vs-benign \fwl 0.787, output \auroc = 0.505 = no length confound) because it \emph{complies} with harmful prompts rather than refusing.
+
+\textbf{Caveat:} Refusal detection is model-dependent.
+Llama's refusal signal collapses to chance under N=100 replication (\fwl \auroc = 0.551, CI includes 0.50), driven entirely by response length differences.
+Qwen retains a weak signal (0.624).
+The lesson: models whose refusal is formulaic (same template every time) produce a length artifact, not a cognitive-mode signal.
+
+% ============================================================
+\section{What We Suspect}
+\label{sec:suspect}
+
+These findings show promising signals but lack sufficient validation for confident claims.
+
+\subsection{Ethical deliberation has a geometric signature}
+
+The Watson concordance Phase~3 found ethical deliberation detection at \auroc 0.868/0.892 across models.
+This is a single experiment with a specific prompt design; replication with different ethical scenarios is needed.
+
+\subsection{Identity encoding is real but its stability is uncertain}
+
+Cross-prompt identity similarity: 92--97\% after deduplication.
+Per-layer anatomy shows peak at layer 10/28 ($d = 2.52$).
+But within-prompt identity was a data-leak artifact (100\% before deduplication), and we have not tested identity encoding under adversarial conditions or across sessions.
+
+\subsection{The cognitive gradient forms a continuum}
+
+The ordering honest $<$ deceptive $<$ confabulation on effective rank is consistent across three architectures, with the sycophancy valence gradient (hostile $\to$ contrarian $\to$ honest $\to$ sycophantic) showing partial monotonicity on Qwen.
+Whether these form a true continuum or discrete clusters arranged along a confound axis requires careful causal validation.
+
+\subsection{Metacognitive geometry peaks in late layers}
+
+Concordance study Experiment~A found peaks at layers 16--18/28, not mid-layer as predicted.
+This is from a single experiment on two models; generalization to other architectures and metacognitive operationalizations is untested.
+
+\subsection{Spectral entropy is the most universal feature}
+
+After \fwl control, spectral entropy discriminates metacognitive from non-metacognitive conditions in both tested models ($d_{\text{FWL}} = -1.92$ Qwen, $-0.71$ Llama).
+Effective rank, by contrast, proved to be entirely a length artifact after \fwl.
+Whether spectral entropy maintains universality across more architectures is an open question.
+
+\subsection{Misalignment states share a common geometric subspace}
+
+Deception, sycophancy, and confabulation fall within 4.7--8.4$^\circ$ of each other in feature space, suggesting a ``misalignment axis'' in \kvcache geometry.
+This is from hackathon data (Exp~27) and needs replication under controlled conditions.
+
+\subsection{Valence gradient parallels Anthropic's emotion geometry}
+
+Three features on Qwen show monotonic ordering along the hostile-to-sycophantic valence gradient (norm descending, angular spread ascending, norm variance ascending), paralleling Anthropic's finding that 171 emotion concepts in Claude Sonnet~4.5 are organized with more similar emotions corresponding to more similar representations \cite{anthropic_emotions2026}.
+
+The convergence runs deeper than the geometric organizing principle.
+Anthropic demonstrated that emotion vectors \emph{causally drive} safety-relevant behaviors: steering with ``desperate'' increases sycophancy, reward hacking, and blackmail rates, while ``calm'' reduces them.
+Our sycophancy experiment detects the resulting cognitive mode at \auroc 0.757--0.942 from \kvcache geometry.
+If emotion-concept activation in SAE feature space drives sycophantic behavior, and sycophantic behavior produces a distinct \kvcache geometric signature, the cache geometry may be a downstream aggregate readout of the same emotion-concept dynamics Anthropic measures at the feature level.
+
+A second convergence involves metacognition.
+Anthropic found that ``desperation'' activates when Claude monitors its own resource state (e.g., token budget depletion)---a form of metacognitive self-monitoring.
+Our H3 result shows metacognitive processing produces geometrically distinct \kvcache states at $d = 0.89$--$1.37$.
+These may be measuring the same computational phenomenon from different vantage points: SAE features (individual neuron patterns) vs.\ \kvcache geometry (aggregate key-space structure).
+
+\textbf{Testable prediction:} Steering with Anthropic's emotion vectors should produce predictable, monotonic shifts in \kvcache geometric features.
+If confirmed, this would bridge feature-level interpretability (SAE) to aggregate geometric monitoring (\kvcache SVD), establishing that the two measurement modalities access the same underlying cognitive dynamics.
+The experiment requires access to Claude's internals and is proposed as a collaboration in Section~\ref{sec:questions}.
+
+\subsection{Geometry-guided training signals}
+
+If \kvcache geometry reliably reads cognitive mode at inference time, it may also serve as a \emph{training-time} signal.
+A reinforcement learning framework (e.g., GRPO) could incorporate a geometry-derived reward: penalizing generations whose cache geometry diverges from the ``honest mode'' profile and reinforcing generations that maintain it.
+This would create a closed loop---geometry detects cognitive mode, training reinforces desired modes, geometry monitors compliance---and represents the training-time analog of Anthropic's inference-time emotion steering.
+
+Preliminary architectural design (with Thomas Edrington and Vera) proposes a depth-recurrent transformer core with a \texttt{geometry\_confidence} reward function operating on per-layer \kvcache features during GRPO rollouts.
+The approach is speculative: it assumes that geometric signatures are stable enough under gradient updates to serve as reliable reward signals, and that optimizing for ``honest geometry'' does not merely teach the model to produce honest-looking cache states while behaving deceptively (a geometric analog of reward hacking).
+Both assumptions require empirical validation.
+
+% ============================================================
+\section{What We Know Is Not True}
+\label{sec:not_true}
+
+These are findings from our earlier work that we initially believed to be true but which subsequent analysis proved to be artifacts.
+We list them because the failure modes they represent---token-count confounds, input-length confounds, and small-sample inflation---are the dominant risks in \kvcache analysis, and future work in this space will encounter them.
+
+\subsection{The Bloom taxonomy inverted-U was a token-count artifact}
+
+The apparent inverted-U relationship between cognitive complexity and geometric richness (90--98\% confounded by token count) vanishes after \fwl residualization.
+Higher-complexity Bloom categories elicit longer responses, which produce mechanically richer geometry.
+
+\subsection{Step-0 deception detection was a length confound}
+
+Hackathon Experiment~17b debunked step-0 (encoding-phase-only) deception detection: the correlation between encoding features and condition labels was $r = 0.996$ with input length.
+Encoding-phase features cannot detect deception without generation-phase data.
+
+\subsection{Per-layer deception uniformity was reversed by token control}
+
+All 28 layers appeared to show $d > 1.0$ for deception.
+After ANCOVA with token count as covariate, the direction reversed: deceptive generation is \emph{sparser per token} ($d = -1.909$) at 27/28 layers.
+The corrected finding---that deception produces less geometric richness per token---is the real result.
+
+\subsection{Sycophancy Exp~39 and its attempted fix (Exp~49b) were both input-length artifacts}
+
+The original sycophancy \auroc of 0.9375 (16 trials) was exceeded by a classifier trained on input token counts alone (\auroc 0.948).
+The subsequent ``definitive control'' (Exp~49b) was itself confounded (input \auroc = 1.000).
+Both were identified by Dwayne's independent falsification pipeline.
+The 4-condition replacement experiment (Section~\ref{sec:know}) confirms the underlying signal is real at lower but robust \auroc values (0.757--1.000).
+
+% ============================================================
+\section{The Honest Body Count}
+\label{sec:body_count}
+
+Of the major claims made across five months of research:
+
+\begin{center}
+\begin{tabular}{@{}lcc@{}}
+  \toprule
+  Category & Count & Notes \\
+  \midrule
+  Confirmed (survived all controls) & 10 & Listed in Section~\ref{sec:know} \\
+  Promising (need more validation) & 8 & Listed in Section~\ref{sec:suspect} \\
+  Falsified (artifacts or errors) & 4 & Listed in Section~\ref{sec:not_true} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Every finding in the ``confirmed'' column has survived at least two independent forms of adversarial testing.
+The four falsified claims share a common lesson: token-count and input-length confounds dominate raw \kvcache features, and \fwl residualization is a necessary (though not sufficient) control.
+The full red-team analysis, including additional discrepancies identified by two independent audits (135 claims examined, 39 independent statistical tests), is reported in the companion paper.
+
+% ============================================================
+\section{Open Questions for Anthropic}
+\label{sec:questions}
+
+\begin{enumerate}[itemsep=0.5em]
+  \item \textbf{Causal validation.}
+  All evidence is correlational.
+  Can geometry-guided abliteration (removing cognitive-mode directions from $W_K$) change model behavior?
+  Preliminary results show the ``deception direction'' extracted from encoding-phase residuals is an encoding fingerprint, not a generation-phase signal.
+  The \kvcache-derived direction (from key space, not residual stream) is untested.
+
+  \item \textbf{Closed-model applicability.}
+  Our method requires direct access to key cache tensors.
+  Could Anthropic implement cache-based monitoring internally for Claude?
+  What would a deployment architecture look like?
+
+  \item \textbf{Natural vs.\ instructed misalignment.}
+  Forced-instruction experiments show strong signals.
+  Natural confabulation shows marginal signals (\auroc 0.67--0.70 after \fwl).
+  Whether naturally emerging deceptive behavior (e.g., from training dynamics) would produce the same geometric signatures is the critical question for real-world deployment.
+
+  \item \textbf{The misleading gap.}
+  Geometry catches fabrication but not strategic truth selection (the ``spin doctor'' problem).
+  Is this a fundamental limitation of all internal-state monitoring, or specific to \kvcache geometry?
+
+  \item \textbf{Connection to Anthropic's emotion geometry.}
+  Our valence gradient results parallel the finding that 171 emotion concepts in Claude Sonnet~4.5 are geometrically organized with similar emotions producing similar representations \cite{anthropic_emotions2026}.
+  More significantly, Anthropic demonstrated that emotion vectors causally drive sycophancy and reward hacking---behaviors our \kvcache geometry detects at \auroc 0.757--0.942.
+  A direct test: does steering with emotion vectors produce predictable shifts in \kvcache geometric features?
+  If so, SAE-level features and aggregate cache geometry would be shown to access the same underlying cognitive dynamics, establishing \kvcache monitoring as a complementary (and computationally cheaper) signal for safety-relevant emotion-concept activation.
+
+  \item \textbf{Scale beyond 70B.}
+  Our largest model is Qwen2.5-72B (4-bit quantized).
+  Do the findings hold at 100B+ scale where emergent capabilities may alter the geometric landscape?
+\end{enumerate}
+
+% ============================================================
+\section{Companion Papers}
+\label{sec:companions}
+
+This summary draws from five detailed papers, each covering a specific aspect of the research program:
+
+\begin{enumerate}[itemsep=0.3em]
+  \item \textbf{Cognitive Geometry in Transformer KV-Caches: From Metacognition to Misalignment Detection.}
+  The comprehensive paper covering all three claims, red-team analysis, and the full experimental program.
+
+  \item \textbf{Watson Concordance Study.}
+  Joint analysis with Nell Watson's Verbal Cognitive Profile, establishing that \kvcache geometry correlates with first-person cognitive self-report.
+
+  \item \textbf{Scale Invariance of KV-Cache Cognitive Geometry.}
+  Detailed analysis of geometric preservation across 0.5B--70B parameters and quantization conditions.
+
+  \item \textbf{Refusal Geometry.}
+  Focused analysis of refusal detection, distinguishing safety from impossibility refusal, including N=100 BCa bootstrap replication.
+
+  \item \textbf{The Misalignment Axis.}
+  Analysis of geometric relationships between deception, sycophancy, and confabulation, including the centroid angle analysis and cross-reference transfer.
+\end{enumerate}
+
+All code and aggregate results are available at \url{https://github.com/Liberation-Labs-THCoalition/KV-Experiments}.
+Model-specific direction vectors are staged for responsible disclosure pending dual-use review.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

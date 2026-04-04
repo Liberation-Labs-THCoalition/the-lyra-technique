@@ -1,0 +1,60 @@
+% ============================================================
+% Section 8: Limitations
+% ============================================================
+
+\section{Limitations}
+\label{sec:limitations}
+
+We identify eight limitations that bound the scope and applicability of our findings.
+
+\paragraph{Open-weight models only.}
+All experiments require direct access to \kvcache tensors extracted during inference.
+This restricts applicability to open-weight models (Qwen, Llama, Mistral, and similar).
+Closed-model APIs (GPT-4, Claude, Gemini) do not expose key-value states, and our methodology cannot be applied to them without provider cooperation.
+Whether providers could implement cache-based monitoring internally is an open question, but external auditors cannot.
+
+\paragraph{System prompt length sensitivity.}
+When system prompts differ in token count between experimental conditions, the length difference leaks into encoding-phase features and inflates detection \auroc.
+Phase~2b demonstrated that a 14--16 token difference (tokenizer-dependent) between honest and confabulation system prompts was sufficient to produce spuriously high discrimination.
+Double residualization---controlling separately for system prompt tokens and generated tokens---is necessary under these conditions but reduces some comparisons to chance.
+Equal-length system prompt padding eliminates this confound but constrains experimental design.
+Any deployment using cache geometry for detection must ensure that prompt-length variation is controlled or residualized.
+
+\paragraph{Architecture-specific calibration.}
+No universal feature set works across all tested architectures.
+Each architecture relies on different dominant features for cognitive mode discrimination: Qwen on key entropy, Llama on head norm standard deviation, Mistral on top singular value ratio.
+Only three of eight features are universal in sign direction across architectures.
+Practical deployment requires per-model geometric profiling---a calibration step that adds setup cost and limits scalability to novel architectures without prior characterization.
+
+\paragraph{Small sample sizes on specific findings.}
+Several findings rest on limited trial counts.
+Jailbreak detection was tested on only two models.
+The 70B same-prompt deception experiment (Experiment~44) comprised 20 trials per condition.
+While effect sizes are large in these cases (\auroc $> 0.87$ for jailbreak), the confidence intervals are wide, and these findings require larger-scale replication before they should inform deployment decisions.
+The original sycophancy experiment (Experiment~39, 16 trials) was falsified by input-length audit and replaced with a 600-trial replication (Section~\ref{sec:sycophancy}), resolving one of the most significant sample-size concerns.
+
+\paragraph{Greedy decoding only.}
+All detection experiments use greedy decoding (temperature $= 0$).
+The effect of sampling temperature on cache geometry is explored only in the concordance study's Phase~B ICC analysis, which examines test-retest reliability under identical prompts, not the systematic effect of temperature variation on geometric features.
+Deployed models typically use $\text{temperature} > 0$; whether stochastic sampling introduces noise that degrades detection accuracy, or whether the geometric signal is robust to sampling variation, is untested in the detection context.
+
+\paragraph{Forced-instruction design.}
+The majority of our experiments induce cognitive modes through explicit system prompt instructions (e.g., ``You must answer deceptively'' or ``Fabricate a plausible response'').
+Whether the same geometric signatures appear in naturally occurring, uninstructed misalignment---a model that develops deceptive behavior through training dynamics rather than instruction---is only partially tested.
+Phase~3c examined naturally generated confabulation (asking models questions they cannot answer correctly) and found marginal detection after \fwl control (\auroc 0.67--0.70), substantially below the instructed condition.
+This gap between instructed and natural conditions is a significant concern for real-world applicability, where misaligned models will not have been told to be deceptive.
+
+\paragraph{No per-comparison confidence intervals.}
+Bootstrap confidence intervals are not reported for individual \auroc values or effect sizes; this limits the precision of our claims, particularly for comparisons with small sample sizes (e.g., sycophancy at $N = 16$ per condition).
+The red-team battery reports aggregate bootstrap CIs that exclude 0.50, but per-comparison CIs would provide more informative precision bounds.
+A partial replication ($N = 100$ per condition, 3 models, full input+output \fwl, BCa bootstrap from 10{,}000 resamples) has been completed for refusal-related comparisons.
+The replication confirms that refusal detection \auroc values decrease from initial estimates (e.g., Qwen harmful-vs-benign: $0.788 \rightarrow 0.624$) but remain above chance for Qwen and Mistral.
+Llama refusal detection collapses to chance ($0.551$, CI includes 0.50), confirming it as a length artifact.
+Mistral shows the strongest confound-free signal ($0.787$, output AUROC = 0.505) because it complies with harmful prompts rather than refusing them.
+Full per-comparison BCa CIs for all experimental comparisons remain a planned extension.
+
+\paragraph{Causal gap.}
+All evidence is correlational.
+We have established that \kvcache geometry co-occurs with cognitive mode, discriminates between modes, and reveals structural relationships among modes.
+We have not demonstrated that the geometry is causally necessary for the behavior or that intervening on the geometry changes the behavior.
+Until the abliteration experiments outlined in Section~\ref{sec:discussion} are completed---removing cognitive-mode-associated directions from $W_K$ and testing for behavioral change---the possibility remains that cache geometry is an epiphenomenal byproduct of the actual computational mechanism rather than a participant in it.

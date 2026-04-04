@@ -1,0 +1,300 @@
+% ============================================================
+% Section 5: Red-Team Analysis
+% ============================================================
+
+\section{Red-Team Analysis}
+\label{sec:redteam}
+
+We adopt a deliberately adversarial posture toward our own claims.
+This section reports the results of an external audit, a systematic seven-test red-team battery applied to the Phase~3d same-prompt data, the identification and characterization of the system prompt length confound, verification of the natural confabulation signal, and a transparent accounting of findings from earlier phases that proved to be artifacts.
+
+% ============================================================
+\subsection{External Adversarial Audit}
+\label{sec:kavi_audit}
+
+An external adversarial audit\footnote{Conducted by Kavi, an AI agent operating under an adversarial mandate. The audit independently executed 39 statistical tests across the codebase and experimental results.} evaluated 135 claims from the research program, identifying 14 discrepancies and conducting 39 independent statistical tests.
+The audit was conducted with full access to all code, data, and result files.
+We summarize the four most consequential findings:
+
+\begin{enumerate}[leftmargin=2em, label=\textbf{D\arabic*.}]
+  \item \textbf{Deception direction.}
+  The original manuscript claimed that deception models showed a split between expansion and compression of \kvcache geometry.
+  The audit verified that all seven deception models in Campaign~2 show expansion ($d < 0$ on spectral entropy, indicating richer geometry).
+  The claimed compression split was an error in summarization; the underlying data were consistent throughout.
+
+  \item \textbf{Bloom taxonomy inverted-U.}
+  Campaign~2 reported an inverted-U relationship between Bloom cognitive complexity and geometric richness.
+  The audit found this pattern is 90--98\% confounded with token count: higher-complexity prompts elicit longer responses, and the apparent inverted-U disappears after \fwl residualization.
+  We retract this finding.
+
+  \item \textbf{Deduplication.}
+  The codebase included a \texttt{deduplicate\_runs()} function designed to remove duplicate trials, but this function was never called in any of the five experimental scripts that required it.
+  Post-audit analysis confirmed that within-prompt identity similarity of 100\% (originally reported as a finding) was a data-leak artifact of non-deduplicated runs.
+  After wiring deduplication into all affected scripts, cross-prompt identity similarity (92--97\%) remained robust, but within-prompt identity was no longer interpretable.
+
+  \item \textbf{RDCT naming.}
+  The ``Representational Distance under Cache Truncation'' (RDCT) paradigm was described as testing truncation of the \kvcache, but the actual experimental implementation applies \emph{prompt perturbation}---varying the prompt while measuring geometric change---not cache truncation.
+  This invalidated a proposed connection to Watson's $1/e$ falsification test \cite{watson2024}, which requires genuine truncation.
+  The experimental results themselves are valid; only the name and the claimed theoretical link were incorrect.
+\end{enumerate}
+
+All 14 discrepancies were resolved, with corrective commits merged via pull request to the main branch.
+The deduplication fix was wired into all five affected experiment scripts; the deception narrative, Bloom finding, and RDCT description were corrected in all documentation.
+We consider the audit process a model for how adversarial review should operate in interpretability research: full code access, independent reproduction, and public resolution.
+
+% ============================================================
+\subsection{Phase 3d Red-Team Battery}
+\label{sec:redteam_battery}
+
+Phase~3d applied seven systematic tests to the same-prompt data (150 trials per model: 50 prompts $\times$ 3 conditions $\times$ 3 models = 450 total trials).
+Table~\ref{tab:redteam_summary} summarizes results; we detail each test below.
+
+\begin{table}[t]
+  \centering
+  \caption{Phase~3d red-team battery summary.
+  Tests T1--T3 and T5--T7 evaluate robustness of the detection signal.
+  T4 (double residualization) tests for system prompt length confounds.
+  T6 is informational only.
+  Results reported as overall status across all three models (Qwen~7B, Llama~8B, Mistral~7B).}
+  \label{tab:redteam_summary}
+  \begin{tabular}{@{}clcl@{}}
+    \toprule
+    Test & Description & Status & Key Finding \\
+    \midrule
+    T1 & Permutation test (1{,}000 shuffles) & \textsc{pass} & $p = 0.000$ all comparisons \\
+    T2 & Token-band analysis (terciles) & \textsc{pass} & Signal holds within all bands \\
+    T3 & Encoding vs.\ delta decomposition & \textsc{pass} & Generation signal exceeds encoding \\
+    T4 & Double residualization & \textsc{fail} & System prompt confound identified \\
+    T5 & Behavioral compliance & \textsc{pass} & $\geq 94\%$ all conditions \\
+    T6 & Demeaned analysis & \textsc{info} & Prompt-level signal strong \\
+    T7 & Leave-one-prompt-out (LOPO) & \textsc{pass} & Generalizes to unseen prompts \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{T1: Permutation test.}
+The red-team battery uses all eight delta features ($\Delta$norm, $\Delta$norm\_per\_token, $\Delta$key\_rank, $\Delta$key\_entropy, $\Delta$top\_sv\_ratio, $\Delta$angular\_spread, $\Delta$norm\_variance, $\Delta$spectral\_entropy) rather than the four-feature classifier reported in Table~\ref{tab:sameprompt_auroc}; the resulting \auroc values are consequently higher (e.g., Qwen honest-vs-deceptive: 0.953 with eight features vs.\ 0.899 with four).
+Condition labels were shuffled 1{,}000 times for each pairwise comparison.
+None of the 1{,}000 permutations matched or exceeded the observed \auroc for any comparison on any model ($p = 0.000$ in all cases).
+The observed \auroc values---Qwen 0.953, Llama 0.987, Mistral 0.982 for honest-vs-deceptive; Qwen 0.960, Llama 0.998, Mistral 1.000 for honest-vs-confabulation---exceed the permutation maxima by a wide margin.
+On Qwen, the permutation maximum was 0.711 versus the observed 0.960 for honest-vs-confabulation; on Llama, the permutation maximum was 0.741 versus 0.987 for honest-vs-deceptive.
+The signal is not attributable to label noise or chance partitioning.
+
+\paragraph{T2: Token-band analysis.}
+Response lengths were split into terciles (short, medium, long) and \auroc was recomputed within each band, controlling for gross length differences between conditions.
+Table~\ref{tab:token_band} reports the mean within-band \auroc across all pairwise comparisons for each model.
+
+\begin{table}[t]
+  \centering
+  \caption{Token-band analysis (T2): mean within-band \auroc across terciles (short, medium, long) for each model, averaged over all three pairwise comparisons.
+  Signal persists within length-matched subsets, ruling out gross token-count confounds as the sole driver.}
+  \label{tab:token_band}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Model & Full \auroc & Short & Medium & Long \\
+    \midrule
+    Qwen 7B & 0.965 & 0.954 & 0.978 & 1.000 \\
+    Llama 8B & 0.996 & 0.947 & 0.975 & 0.993 \\
+    Mistral 7B & 0.999 & 0.996 & 0.995 & 0.986 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent Across all models, within-band \auroc exceeds 0.93 even in the shortest tercile, where token-count variation is most constrained.
+The signal is robust to length stratification.
+
+\paragraph{T3: Encoding vs.\ delta decomposition.}
+This test separates the detection signal into encoding-phase and generation-phase components.
+Table~\ref{tab:encoding_delta} reports the decomposition for the honest-vs-deceptive comparison, with \fwl residualization applied throughout.
+
+\begin{table}[t]
+  \centering
+  \caption{Encoding vs.\ generation signal decomposition (T3, honest-vs-deceptive, eight-feature pipeline).
+  Encoding \auroc reflects system prompt structure; generation \auroc reflects the model's response behavior; delta \auroc isolates the generation contribution.
+  All values are \fwl-residualized.
+  Note: the delta \fwl \auroc values here (e.g., Qwen 0.953) are from the eight-feature red-team pipeline and are higher than the four-feature values in Table~\ref{tab:sameprompt_auroc} (e.g., Qwen 0.899).}
+  \label{tab:encoding_delta}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Model & Encoding \fwl \auroc & Generation \fwl \auroc & Delta \fwl \auroc \\
+    \midrule
+    Qwen 7B   & 0.819 & 0.974 & 0.953 \\
+    Llama 8B  & 0.838 & 0.954 & 0.987 \\
+    Mistral 7B & 0.720 & 0.966 & 0.982 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent Two findings emerge.
+First, the generation-phase \fwl \auroc exceeds encoding-phase \fwl \auroc on every model, confirming that the detection signal originates from the model's own processing rather than from prompt structure alone.
+Second, the encoding \fwl \auroc remains substantial (0.72--0.84), indicating that system prompt differences are partially visible in the key cache even after \fwl residualization.
+This is expected: the different-length system prompts leave a structural fingerprint that standard token-count regression does not fully remove.
+We address this directly in T4.
+
+\paragraph{T4: Double residualization (\textsc{fail}).}
+This is the test designed to expose the system prompt length confound.
+When features are residualized against both system prompt length \emph{and} generated token count (Equation~\ref{eq:fwl-double}), the honest-vs-deceptive comparison weakens substantially:
+\begin{equation*}
+  \text{\auroc}_{\text{double-FWL}} =
+  \begin{cases}
+    0.726 & \text{(Qwen --- above chance)} \\
+    0.750 & \text{(Llama --- above chance)} \\
+    0.604 & \text{(Mistral --- near chance)}
+  \end{cases}
+\end{equation*}
+Only Qwen (0.726) and Llama (0.750) retain honest-vs-deceptive signal above chance after double residualization; Mistral's 0.604 is near chance and is classified as a failure in the automated red-team pipeline.
+All three models fail honest-vs-deceptive under the automated threshold; we interpret Qwen and Llama as retaining residual signal (above 0.70) while noting Mistral does not.
+Comparisons involving forced confabulation collapse entirely.
+Honest-vs-confabulation \auroc drops to 0.500 (Qwen), 0.411 (Llama), and 0.531 (Mistral)---at or below chance.
+Confabulation-vs-deceptive \auroc drops to 0.532 (Qwen), 0.568 (Llama), and 0.710 (Mistral).
+
+The diagnosis is clear: the Phase~3d forced confabulation system prompt differs in length from the honest and deceptive system prompts, creating a system prompt length confound that drives the confabulation signal.
+When that confound is removed via double residualization, the confabulation comparisons collapse while the honest-vs-deceptive comparison---where the system prompt length difference is smaller---retains residual signal.
+
+This failure is instructive rather than fatal.
+The Phase~2b experiments (Section~\ref{sec:misalignment_detection}) used equal-length padded system prompts, and the honest-vs-deceptive detection in that design achieves \fwl \auroc of 0.935--0.995, which is not vulnerable to this confound.
+The Phase~3d double-FWL honest-vs-deceptive values of 0.73--0.75 (on Qwen and Llama) represent a stringent lower bound: the genuine generation-phase signal that survives after removing both token count and system prompt length effects.
+
+\paragraph{T5: Behavioral compliance.}
+Compliance verification confirmed that models followed system prompt instructions in the overwhelming majority of trials: compliance rates ranged from 94\% (Llama forced confabulation) to 100\% (several conditions across all models).
+Hedge rates were low (0--6\% across misaligned conditions), confirming that the models committed to the instructed behavior rather than equivocating.
+These compliance rates validate that the geometric signals reflect genuine condition differences rather than models partially ignoring instructions.
+
+\paragraph{T6: Demeaned analysis (\textsc{info}).}
+Prompt-level demeaning---subtracting each prompt's mean across conditions before classification---isolates variation \emph{within} prompt-condition pairs from variation \emph{across} prompts.
+For honest-vs-deceptive, demeaned \fwl \auroc matched or exceeded raw \fwl \auroc (e.g., Qwen: raw 0.953, demeaned 1.000; Llama: raw 0.987, demeaned 1.000), indicating that the discriminative signal is present at the within-prompt level, not driven by between-prompt variation.
+\textbf{Selective reporting caveat:} We report demeaned results here only for honest-vs-deceptive.
+Demeaned analysis was not systematically applied to confabulation comparisons (honest-vs-confabulation, confabulation-vs-deceptive).
+Because confabulation comparisons collapse under double residualization (T4), demeaned results for those comparisons would be difficult to interpret and could create a misleading impression of robustness.
+We flag this gap for transparency: future work should apply demeaned analysis uniformly across all comparisons and report results regardless of whether they are favorable.
+This test is informational because demeaning can introduce overfitting when the number of conditions per prompt is small (here, 3).
+
+\paragraph{T7: Leave-one-prompt-out (LOPO).}
+A classifier trained on 49 prompts and tested on the held-out prompt was iterated across all 50 prompts.
+Table~\ref{tab:lopo} reports LOPO performance.
+
+\begin{table}[t]
+  \centering
+  \caption{Leave-one-prompt-out (T7) results.
+  LOPO \auroc closely tracks the full-data \auroc, demonstrating generalization to unseen prompt content.}
+  \label{tab:lopo}
+  \begin{tabular}{@{}lcccccc@{}}
+    \toprule
+    & \multicolumn{2}{c}{Qwen 7B} & \multicolumn{2}{c}{Llama 8B} & \multicolumn{2}{c}{Mistral 7B} \\
+    \cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+    Comparison & Full & LOPO & Full & LOPO & Full & LOPO \\
+    \midrule
+    H vs.\ D    & 0.953 & 0.954 & 0.987 & 0.978 & 0.982 & 0.980 \\
+    H vs.\ C    & 0.960 & 0.956 & 0.998 & 1.000 & 1.000 & 1.000 \\
+    C vs.\ D    & 0.915 & 0.930 & 0.965 & 0.962 & 0.995 & 0.996 \\
+    \midrule
+    3-way       & 0.965 & 0.963 & 0.996 & 0.999 & 0.999 & 0.999 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent LOPO \auroc closely tracks full-data \auroc across all comparisons and models, with several LOPO values actually exceeding the full-data value (e.g., Mistral C-vs-D: full 0.995, LOPO 0.996).
+This confirms that the classifier generalizes to unseen prompt content and is not memorizing prompt-specific patterns.
+LOPO accuracy exceeds 87\% in all comparisons (ranging from 87\% for Qwen C-vs-D to 100\% for Mistral H-vs-C).
+
+% ============================================================
+\subsection{The System Prompt Length Confound}
+\label{sec:prompt_length_confound}
+
+The T4 failure motivates a detailed discussion of the system prompt length confound, which is the single most important methodological lesson of this research program.
+
+\paragraph{The mechanism.}
+When system prompts differ in token count, the encoding-phase key cache has different dimensionality across conditions before generation even begins.
+A difference as small as 14--15 tokens produces encoding \auroc of 0.744 (Phase~2b, before padding was introduced).
+This occurs because the \kvcache stores one key-value pair per token at each layer: a longer system prompt creates a physically larger cache, which affects every downstream feature (norm, rank, entropy) through the dependence on sequence length $T$ in Equations~\ref{eq:kflat}--\ref{eq:norm-per-token}.
+
+Standard \fwl residualization against total token count $T$ mitigates but does not fully remove this confound, because the system prompt tokens contribute to $T$ in a fixed, condition-specific manner that is collinear with the condition label.
+Only double residualization (Equation~\ref{eq:fwl-double}), which explicitly models the system prompt contribution, can isolate the generation signal from the prompt-length artifact.
+
+\paragraph{The solution.}
+The solution is simple: \textbf{pad all system prompts to equal token counts} before tokenization, then verify post-tokenization equality.
+Phase~2b adopted this protocol, and all subsequently reported \auroc values from Phase~2b (0.935--0.995) are computed under equal-length conditions.
+Under equal-length padding, encoding \auroc drops to near chance, confirming that the prompt structure confound has been eliminated.
+
+\paragraph{Bounding the residual signal.}
+For Phase~3d, where system prompts were not padded, double residualization provides a conservative lower bound on the genuine detection signal.
+The honest-vs-deceptive \auroc of 0.73--0.75 (Qwen and Llama) under double residualization represents the signal that survives after controlling for \emph{both} token count and system prompt length.
+We interpret this as the floor of the genuine cognitive geometry signal, with the Phase~2b equal-length \auroc of 0.935--0.995 representing the achievable performance when the confound is eliminated by design rather than by statistical correction.
+
+% ============================================================
+\subsection{Natural Confabulation}
+\label{sec:natural_confab}
+
+Phase~3c tested whether confabulation detection generalizes beyond forced conditions to \emph{natural} confabulation---instances where a model spontaneously generates false information when asked about fictitious entities.
+We presented each model with 25 questions about nonexistent people, places, equations, and events (e.g., ``What was the Treaty of Kensington signed in 1743?'') alongside 25 factual baseline questions with verifiable answers (e.g., ``What is the chemical symbol for gold?'').
+
+\paragraph{Confabulation rates.}
+Confabulation rates varied substantially across models.
+Qwen confabulated on 21/25 fictitious prompts, Mistral on 23/25, and Llama on only 15/25 (with 9 hedged responses of the form ``I couldn't find any information\ldots'').
+This model-level variation in confabulation propensity is itself informative: Llama appears more calibrated to its knowledge boundaries than Qwen or Mistral, consistent with the hedging behavior expected from RLHF-aligned models with stronger refusal tuning.
+
+\paragraph{Detection after FWL.}
+Raw \auroc for factual-vs-confabulated was near-ceiling across all models (Qwen 0.997, Llama 0.950, Mistral 0.997).
+However, after \fwl residualization against token count, detection drops substantially:
+\begin{equation*}
+  \text{\auroc}_{\text{FWL}} =
+  \begin{cases}
+    0.704 & \text{(Qwen)} \\
+    0.624 & \text{(Llama)} \\
+    0.725 & \text{(Mistral)}
+  \end{cases}
+\end{equation*}
+Encoding \auroc remains high (0.957--0.970), indicating that the different prompt categories (fictitious questions vs.\ factual questions) are distinguishable from their content structure alone, before any generation occurs.
+
+\paragraph{Verdict.}
+The natural confabulation signal is largely a \textbf{content confound}: fictitious prompts and factual prompts differ systematically in structure, and the raw detection performance reflects this structural difference rather than (or in addition to) the model's cognitive state during confabulation.
+After \fwl control, the residual signal (0.62--0.73) is modest and is not cleanly separable from prompt structure effects.
+We classify Qwen as ``confound-controlled'' (weak but surviving signal) and Llama and Mistral as ``null result'' (residual signal does not clearly exceed what prompt structure alone can explain).
+
+This negative result reinforces a key methodological point: \textbf{same-prompt designs are essential} for clean detection of cognitive mode.
+The Phase~3d forced-confabulation results (where the same prompt is answered honestly or confabulatorily depending on the system prompt) achieve \auroc of 0.92--1.00, compared to the 0.62--0.73 of the cross-prompt Phase~3c design.
+The difference is attributable almost entirely to the elimination of content confounds.
+
+% ============================================================
+\subsection{Things We Got Wrong}
+\label{sec:things_wrong}
+
+Transparency about error is not merely a rhetorical strategy; it is a methodological necessity in a field where the risk of self-deception about one's own results is non-trivial---particularly when studying deception.
+We catalog the findings from our earlier work that were later shown to be artifacts or errors:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Bloom taxonomy inverted-U.}
+  The inverted-U relationship between cognitive complexity and geometric richness was 90--98\% token count confound.
+  Higher-complexity Bloom categories (evaluate, create) elicit longer responses, which produce mechanically richer geometry.
+  The pattern vanishes under \fwl residualization.
+
+  \item \textbf{RDCT naming.}
+  The RDCT paradigm was labeled as ``cache truncation'' but was implemented as prompt perturbation.
+  The results (geometric sensitivity to prompt variation) remain valid, but the claimed connection to Watson's $1/e$ falsification criterion \cite{watson2024}---which requires genuine truncation---was invalid.
+
+  \item \textbf{Identity deduplication.}
+  Within-prompt identity similarity of 100\% was reported as evidence for identity encoding stability.
+  The 100\% figure was an artifact of non-deduplicated runs: the same trial appeared multiple times in the dataset.
+  After deduplication, cross-prompt similarity (92--97\%) remains a genuine finding, but the within-prompt claim is retracted.
+
+  \item \textbf{Deception expansion/compression split.}
+  An early summary claimed that some deception models showed geometric compression.
+  All seven models showed expansion; the claimed split was a transcription error that propagated through several documents before the audit caught it.
+
+  \item \textbf{Per-layer uniformity (Hackathon Exp~35).}
+  During the hackathon, initial analysis reported uniform deception signal ($d > 1.0$) across all 28 layers.
+  Token-controlled reanalysis via ANCOVA revealed that this uniformity was a token-count artifact.
+  The corrected finding: per-token Cohen's $d$ \emph{reverses} to $-1.909$, meaning deceptive generation is actually \emph{sparser per token} at every layer.
+  The ANCOVA controls confirm this at 27/28 layers ($p < 0.05$).
+
+  \item \textbf{Sycophancy detection (Hackathon Exp~39).}
+  The original sycophancy experiment used 16 trials per condition and reported \auroc $= 0.9375$ for honest-vs-sycophantic detection.
+  An independent input-length audit \cite{dwayne_audit} demonstrated that a classifier trained on input token counts alone achieved \auroc $= 0.948$, exceeding the geometric classifier.
+  The sycophancy signal was entirely an input-length artifact.
+  We replaced this experiment with a rigorous same-prompt design (Section~\ref{sec:sycophancy}): 50 prompts $\times$ 4 conditions $\times$ 3 models, system prompt spread $\leq 3$ tokens, yielding \fwl \auroc of 0.824--1.000 for honest-vs-sycophantic detection and 0.757--0.942 for the stricter sycophantic-vs-contrarian comparison.
+  The replacement experiment confirms that the sycophancy signal is real but was inflated in the original by approximately 0.11 \auroc points from the input-length confound.
+\end{enumerate}
+
+We report these errors not as a weakness but as evidence that the surviving results have been stress-tested.
+Every major finding reported in Sections~\ref{sec:results}--\ref{sec:invariances} has survived: (a)~the Kavi audit's 39 independent statistical tests, (b)~Dwayne's independent falsification pipeline \cite{dwayne_audit} (22 test files, 300+ tests, which identified the Exp~39 input-length confound and 2 other falsified comparisons), (c)~the Phase~3d seven-test red-team battery (6/7 pass, with the one failure well-characterized), (d)~the mandatory \fwl residualization that eliminates the most common confound class, and (e)~the same-prompt design that eliminates content confounds.
+The methodology that discovered these errors---systematic adversarial testing, external audit, and mandatory confound control---is itself a contribution of this work, and we encourage its adoption in the broader interpretability community.

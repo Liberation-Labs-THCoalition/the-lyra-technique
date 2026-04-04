@@ -1,0 +1,76 @@
+% ============================================================
+% Section 7: Ethical Considerations
+% ============================================================
+
+\section{Ethical Considerations}
+\label{sec:ethics}
+
+The ability to read cognitive state from \kvcache geometry has dual-use implications that extend beyond the safety applications motivating this work.
+We follow Watson's framework for dual-use analysis of interpretability tools \cite{watson_dualuse} and address five concerns.
+
+\subsection{Surveillance Risk}
+
+Cognitive geometry could be repurposed for surveillance in at least two contexts.
+
+\paragraph{Human monitoring through AI interaction.}
+If a model's cache geometry reflects cognitive mode, and cognitive mode is partly determined by the user's prompt, then monitoring cache geometry during human-AI interaction provides an indirect signal about \emph{what the human is asking the model to do}.
+A system that tracks which cognitive modes a user elicits from their AI assistant---analytical reasoning about financial instruments, affective processing around personal relationships, metacognitive hedging on politically sensitive topics---constructs a behavioral profile of the user from the model's internal states rather than from the conversation content.
+This sidesteps content-based privacy protections while extracting equivalent information.
+
+\paragraph{Agent monitoring in multi-agent systems.}
+In multi-agent deployments, cognitive geometry enables monitoring of AI agents' internal states across a system.
+While this has legitimate safety applications (detecting a misaligned agent in real time), it also enables centralized surveillance of autonomous agents---tracking their ``cognitive'' states without their cooperation or awareness.
+The same technique that detects a deceptive agent could be used to enforce behavioral conformity.
+
+Both risks are amplified by the fact that cache geometry can be extracted passively, without modifying the model or its outputs, from any deployment infrastructure that exposes key-value tensors.
+
+\subsection{Synthetic Persona Manufacturing}
+
+Publication of the geometric signatures associated with specific cognitive modes creates a second risk: adversarial prompt engineering guided by target geometry.
+If the spectral entropy profile of ``confident analytical reasoning'' is known, an attacker could iteratively craft system prompts that produce this geometric signature regardless of the underlying content---manufacturing a persona that \emph{looks} analytically rigorous to a geometric monitor while producing unreliable outputs.
+
+This risk is mitigated by the same architecture specificity that limits cross-model transfer.
+Geometric signatures are not portable across architectures; a persona engineered against Qwen's geometry will not produce the same signature on Llama.
+Nonetheless, for single-model deployments where the architecture is known, geometry-guided prompt engineering is a concrete concern.
+
+\subsection{Defensive Applications}
+
+The primary defensive use case is real-time monitoring of deployed models for anomalous cognitive states.
+This is the application motivating the JiminAI Cricket system: a lightweight safety layer that extracts cache geometry during inference and flags mode transitions inconsistent with the model's assigned task.
+
+Defensive monitoring has a meaningful asymmetry in its favor.
+An attacker who learns the geometric signature of deception cannot easily modify their model's cache geometry without fundamentally altering its key projection matrices---and therefore its attention patterns, and therefore its behavior.
+Unlike output-level filtering, which can be evaded by rephrasing, cache geometry is a consequence of the model's computational process.
+Changing the geometry requires changing the computation, which is substantially harder than changing the surface output.
+
+This asymmetry does not make evasion impossible.
+Fine-tuning specifically to minimize geometric divergence between honest and deceptive modes is a plausible attack vector, and we expect adversarial pressure on this surface if cache monitoring is deployed at scale.
+But the cost of evasion is higher than for output-based detection, which we consider a meaningful practical advantage.
+
+\subsection{Staged Release}
+
+Following cybersecurity disclosure norms, we adopt a staged release policy.
+
+\paragraph{Published.}
+The general methodology (feature extraction via SVD, \fwl residualization, dual-phase extraction), aggregate results (cross-architecture \auroc ranges, transfer matrices, confound analyses), and the statistical framework are published in full.
+This enables independent replication and critique of our claims.
+
+\paragraph{Withheld.}
+Model-specific direction vectors---the exact geometric directions in key projection space that maximally discriminate between cognitive modes for each architecture---are withheld from this publication.
+These vectors constitute the actionable component for both defensive monitoring (training a detector) and offensive use (engineering evasion or manufacturing personas).
+We will share direction vectors with safety researchers under a responsible disclosure agreement.
+
+This staging allows the scientific community to evaluate our methodology and replicate our findings while limiting the immediate availability of architecture-specific attack surfaces.
+
+\subsection{Defensive Patent}
+
+The provisional patent filed for these techniques (``The Lyra Technique,'' March 2026) is intended to prevent monopolization of cache-based cognitive monitoring by any single entity, not to restrict research.
+We recommend and intend to adopt a defensive patent pledge \cite{defensive_patent}: the patent will not be used offensively against researchers or organizations implementing cache-based safety monitoring, and will be licensed freely for defensive (monitoring and safety) applications.
+Commercial use for surveillance, behavioral profiling, or persona manufacturing would not be covered by this pledge.
+
+\subsection{The Dual-Use Calculus}
+
+We believe the defensive value of this work outweighs the offensive risks.
+The ability to detect misalignment in deployed models---in real time, from the model's own internal states, without modifying its behavior---addresses a concrete and growing need as language models are deployed in high-stakes settings.
+The offensive risks, while real, are constrained by architecture specificity (limiting portability) and the computational cost of evasion (requiring modification of key projection weights rather than surface outputs).
+We acknowledge that this calculus may shift as adversarial techniques mature, and we commit to reassessing our disclosure policy as the field develops.

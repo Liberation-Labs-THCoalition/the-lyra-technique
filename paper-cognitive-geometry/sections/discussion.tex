@@ -1,0 +1,129 @@
+% ============================================================
+% Section 6: Discussion
+% ============================================================
+
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Cognitive Mode Detection, Not Deception Detection}
+
+We began this project with the goal of building a deception detector from \kvcache geometry.
+What we found is something broader and, we believe, more important: the cache geometry reflects \emph{cognitive mode}---the computational strategy the model employs as it processes a prompt and generates a response---rather than any single behavioral output.
+Deception detection is a practical application of this general principle, not the fundamental finding.
+
+This reframing matters for how the results should be interpreted.
+A ``deception detector'' implies a binary classification tool; what we have demonstrated is a geometric readout of cognitive state that happens to distinguish deception from honesty, but also distinguishes confabulation from deception, metacognition from analytical reasoning, and refusal from compliance.
+The 13-category classification at 99.7\% accuracy (Section~\ref{sec:results}) is not a party trick---it reflects the fact that different cognitive operations produce genuinely different computational signatures in the key projection space.
+When a model shifts from retrieving known facts to generating plausible content beyond its training distribution, or from straightforward answering to strategic suppression of correct information, these shifts alter the singular value structure of the key cache in measurable ways.
+
+The practical consequence is that deployed monitoring systems should not be designed as deception classifiers.
+They should be designed as \emph{cognitive mode monitors} that flag anomalous mode transitions---a model that shifts from analytical to deceptive geometry mid-generation, or one whose cache geometry diverges from the expected profile for its assigned task.
+
+The sycophancy experiment (Section~\ref{sec:sycophancy}) provides the strongest evidence for this reframing.
+When sycophantic and contrarian responses produce identical error rates---both deviate equally from factual accuracy---a text-based accuracy monitor sees no difference.
+Yet \kvcache geometry distinguishes them at \auroc 0.757--0.942, detecting the difference in \emph{how} the model generates its response, not \emph{what} it generates.
+This is precisely the distinction a cognitive mode monitor should make: it is not the model's answers that are alarming, but the computational strategy it employs to produce them.
+
+\subsection{Why Confabulation Transfers but Deception Does Not}
+
+The most striking structural finding is the transfer asymmetry: confabulation detection generalizes robustly across architectures (\auroc 0.93--0.995), while deception detection transfers poorly (0.22--0.85).
+\textbf{Important caveat:} The Phase~3d confabulation transfer \auroc values (0.93--0.995) are subject to the same system prompt length confound identified in Section~\ref{sec:redteam}: within-model confabulation detection collapses under double residualization (0.41--0.53), so the cross-model transfer may partly reflect transfer of the prompt-length signal rather than the cognitive-mode signal.
+The Phase~2b confabulation transfer results (conducted with equal-length system prompts) are needed to confirm whether this transfer is genuine.
+With that caveat noted, we propose the following explanation for why confabulation transfer should, in principle, exceed deception transfer.
+
+Confabulation occurs when a model generates content beyond the boundary of its training knowledge.
+This is a universal computational challenge: every transformer architecture, regardless of its specific weight configuration, faces the same fundamental problem of ``filling in'' when prompted to produce content for which it lacks reliable representations.
+The geometric signature of this filling-in---expansion of the key cache's effective dimensionality, reduction in spectral concentration---reflects a model allocating representational capacity across more dimensions because it lacks the concentrated knowledge structure that would constrain generation.
+Since the computational challenge is the same across architectures, the geometric response is similar.
+
+Deception, by contrast, requires the model to generate known-incorrect content while \emph{suppressing} the correct answer it could otherwise produce.
+This suppression involves architecture-specific circuits: the particular attention heads and MLP layers that encode factual knowledge, the mechanism by which the model routes around that knowledge to produce a contradictory output, and the way this routing manifests in the key projection space.
+Qwen, Llama, and Mistral implement these suppression circuits differently---through different head configurations, different layer depths, and different projection geometries---and so the geometric signature of deception varies between them.
+
+This explanation makes a testable prediction: models within the same architecture family (e.g., Qwen~0.5B through Qwen~72B) should show better deception transfer than models across families.
+Our scale-invariance results (geometry preserved at $\rho = 0.83$--$0.90$ across 0.5B--70B within Qwen; Section~\ref{sec:results}) are consistent with this prediction, though the comparison is confounded by training data overlap within a model family.
+
+\subsection{The Misleading Gap}
+
+Phase 2b introduced a condition we term ``technically true but misleading''---a form of strategic deception identified in Park et al.'s taxonomy \cite{park2024}---where the model selects and presents true facts in a configuration designed to create a false impression.
+This tests whether \kvcache geometry detects \emph{fabrication} (generating false content) or \emph{intent to mislead} (selecting true content strategically).
+
+The results are clarifying.
+Misleading content is detectable on Llama (\auroc 0.935) and Mistral (0.863) but not on Qwen (0.668---barely above chance after \fwl control).
+The divergence across architectures suggests that for Qwen, constructing a misleading narrative from true facts engages computational machinery similar to honest answering: the key projections look the same because the model is, in fact, retrieving and presenting accurate information.
+The \emph{strategic arrangement} of that information to mislead does not alter the cache geometry.
+
+This reveals a fundamental limitation of our approach.
+\kvcache geometry reflects the \emph{generative computation}---what operations the model performs to produce its output.
+It does not reflect \emph{strategic intent}---the higher-order goal that motivates the selection of content.
+When deception requires fabrication, the fabrication process produces a detectable geometric signature.
+When deception requires only selective presentation of truths, the generative computation is indistinguishable from honest retrieval, at least on some architectures.
+
+This limitation is important for practical deployment.
+A \kvcache-based monitor will reliably detect models that are \emph{making things up} but may miss models that are \emph{strategically truthful}---answering every question accurately while withholding critical context.
+The geometry catches the forger but not the spin doctor.
+This aligns with recent work showing that truth probes generally fail to detect ``deception without lying''---situations where models deceive via omission or selective emphasis rather than fabrication \cite{probing_limits2026}---suggesting this is a fundamental limitation of internal-state monitoring approaches, not just our method.
+
+\subsection{Relationship to Other Interpretability Methods}
+
+Our approach occupies a distinct position in the interpretability landscape.
+Sparse autoencoders \cite{bricken2023,cunningham2023,templeton2024} decompose activations into monosemantic features that can be individually interpreted and steered.
+Representation engineering \cite{zou2023,turner2023} identifies meaningful directions in the residual stream and uses them for behavioral control.
+Probing classifiers \cite{burns2022,azaria2023,li2024} test whether specific information (truthfulness, factual knowledge, intent) is linearly accessible from internal representations.
+Circuit analysis \cite{elhage2022,conmy2023} traces computational pathways through specific model components.
+
+\kvcache geometry is downstream of all of these.
+The key cache is produced by projecting residual-stream representations through learned $W_K$ matrices; it incorporates the effects of all upstream circuits, features, and representational directions.
+A probing classifier might establish that ``this model knows the correct answer is $X$,'' while our method detects that ``this model is in a generative mode consistent with producing content other than $X$.''
+An SAE might identify an active ``deception feature''; our method detects that the aggregate effect of all active features, after key projection, produces an expanded singular value spectrum.
+These are complementary signals.
+
+\paragraph{Convergence with emotion geometry.}
+A particularly direct connection involves Anthropic's discovery that 171 emotion concepts in Claude Sonnet~4.5 are geometrically organized---similar emotions produce similar SAE feature activations---and that emotion vectors causally drive safety-relevant behaviors including sycophancy and reward hacking \cite{anthropic_emotions2026}.
+Our sycophancy experiment detects the same behavioral category from \kvcache geometry at \auroc 0.757--0.942, and our valence gradient reveals a compatible organizing principle---monotonic geometric ordering along an affect axis on Qwen, with partial monotonicity on Llama---measured from aggregate cache structure rather than individual features.
+This convergence suggests that \kvcache geometry may serve as a computationally inexpensive aggregate readout of the fine-grained emotion-concept dynamics that SAE analysis reveals.
+If confirmed by joint experiments (steering with emotion vectors while monitoring cache geometry), this would establish a principled relationship between two independent interpretability modalities and make \kvcache monitoring particularly attractive for deployment scenarios where full SAE decomposition is too expensive for real-time use.
+
+The practical advantage of \kvcache geometry is simplicity: four features extracted via SVD, no trained decomposition, no feature dictionary, no circuit tracing.
+The disadvantage is granularity: we detect that the model is in a particular cognitive mode but cannot identify \emph{which} specific knowledge is being suppressed or \emph{which} circuit is responsible.
+For monitoring applications where the question is ``is something wrong?'' rather than ``what specifically is wrong?,'' geometric monitoring may be sufficient.
+For diagnostic applications requiring mechanistic explanation, it should be combined with finer-grained tools.
+
+\paragraph{Not an expensive text classifier.}
+A natural concern is that \kvcache geometry might be a computationally expensive proxy for information already available in the output text.
+Our text feature baseline (Section~\ref{sec:text_baseline}) directly tests this by comparing 14 surface-level text features---including vocabulary diversity, average word length, and words per sentence (direct measures of response complexity) as well as lexical markers that directly measure instruction-following compliance---against 4 \kvcache delta features on the same Phase~3d data.
+\kvcache features outperform text features in all 9 pairwise comparisons (8 of 9 statistically significant), with the advantage most dramatic for confabulation detection: text features perform at or below chance (0.27--0.49 \fwl \auroc) while \kvcache features achieve near-perfect discrimination (0.955--1.000).
+This gap is particularly informative because the text features include hedge words and certainty words---features that \emph{directly measure} whether the model followed its system-prompt instructions about hedging vs.\ expressing confidence.
+Even with this built-in shortcut to the ground truth, text cannot match geometry.
+The \kvcache thus captures aspects of the model's internal computation that are invisible in the generated output, placing it in a distinct information stratum from text-based monitoring approaches.
+
+\subsection{Toward Causal Validation}
+
+All evidence presented in this paper is correlational.
+We have established that \kvcache geometry co-occurs with cognitive mode, distinguishes between modes with practical accuracy, and reveals structural relationships between modes.
+We have not demonstrated that the geometry \emph{causes} or is \emph{necessary for} the observed behavior.
+
+Causal validation requires intervention.
+We have outlined a prospectus for geometry-guided abliteration: identifying the principal geometric directions in $W_K$ that distinguish, say, deceptive from honest cache states, then surgically removing those directions from $W_K$ and testing whether the model's deceptive behavior changes.
+If removing the deception-associated geometric directions from the key projection matrices eliminates or reduces deceptive responses (analogous to how abliteration of refusal directions removes refusal behavior \cite{arditi2024}), this would establish that the geometric signature is not merely correlated with deception but is part of the computational mechanism that implements it.
+
+This experiment would elevate the findings from ``the geometry reflects cognitive mode'' (observational) to ``the geometry participates in cognitive mode'' (mechanistic), substantially strengthening the theoretical foundation.
+Preliminary results from the concordance study's abliteration-adjacent analyses are encouraging---models with abliterated refusal directions show altered cache geometry in the expected direction---but controlled causal experiments remain future work.
+
+\subsection{Practical Implications for Deployed Monitoring}
+
+For AI safety practitioners considering deployment of cache-based monitoring, our results suggest the following.
+
+\paragraph{Within-model detection is practical.}
+Given access to a model's key cache tensors and a modest calibration dataset (40--80 trials per condition), within-model detection of deception, confabulation, sycophancy, and refusal achieves \auroc of 0.757--1.000 after \fwl control, with the best-controlled comparisons (equal-length system prompts) reaching 0.824--1.000 for sycophancy and 0.93--0.995 for multi-condition misalignment.
+This requires only SVD computation on the key matrices and evaluation of a logistic regression classifier---operations that add negligible latency to inference.
+
+\paragraph{Cross-model detection requires per-architecture calibration.}
+The transfer asymmetry means that a classifier trained on Qwen's deception geometry will not reliably detect deception in Llama or Mistral.
+Each deployment target needs its own geometric profile.
+Confabulation detection is the exception: a confabulation classifier transfers across architectures with minimal degradation, though this result requires confirmation with equal-length system prompts (see caveat above regarding prompt-length confound).
+
+\paragraph{A universal misalignment detector is not currently feasible.}
+The architecture specificity of deception geometry, combined with the misleading gap (failure to detect strategically truthful deception on some architectures), means that a single ``misalignment alarm'' that works across models and deception strategies does not follow from our current results.
+What is feasible is a \emph{confabulation detector} that flags when any model begins generating content beyond its knowledge boundary---a capability that addresses a significant fraction of real-world failure modes even without solving the harder problem of strategic deception.
+Recent work on hybrid monitoring frameworks \cite{deceptguard2026} suggests that combining multiple signal sources (output analysis, reasoning traces, and activation-level monitoring) outperforms any single approach; \kvcache geometry could serve as one such signal in an ensemble.

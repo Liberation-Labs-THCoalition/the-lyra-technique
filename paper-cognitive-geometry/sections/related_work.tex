@@ -1,0 +1,108 @@
+% ============================================================
+% Section 2: Related Work
+% ============================================================
+
+\section{Related Work}
+\label{sec:related_work}
+
+Our work draws on and extends several lines of research in mechanistic interpretability, AI safety, and systems engineering.
+We organize prior work by methodology and highlight, for each, the gap that \kvcache geometry addresses.
+
+\subsection{Mechanistic Interpretability}
+
+The circuits program initiated by Elhage et al.\ \cite{elhage2022} demonstrated that individual attention heads and MLP neurons implement identifiable computational motifs---induction heads, copy-suppression heads, factual recall circuits---that can be traced through a model's forward pass.
+Conmy et al.\ \cite{conmy2023} automated this process with ACDC (Automatic Circuit DisCovery), enabling scalable identification of task-relevant subnetworks.
+Nanda et al.\ \cite{nanda2023} revealed how grokking transitions correspond to the formation of interpretable circuits during training.
+
+These approaches analyze weights and activations at inference time, identifying \emph{which} components are responsible for a computation.
+They do not, however, characterize the \emph{aggregate geometric state} of the model's running computation---the high-dimensional structure that accumulates in the \kvcache as the model processes a prompt and generates a response.
+Our work is complementary: where circuits research asks ``which heads matter for this task,'' we ask ``what does the collective output of all heads look like, geometrically, when the model performs this task?''
+
+Sparse autoencoders (SAEs) represent a parallel effort to decompose activations into interpretable features \cite{bricken2023,cunningham2023,templeton2024}.
+SAE features are learned post hoc from activation distributions and can identify monosemantic directions (e.g., a ``Golden Gate Bridge'' feature).
+Our geometric features---effective rank, spectral entropy, key norm, top singular value ratio---are computed directly from the \kvcache via singular value decomposition without any learned decomposition.
+This makes them immediately applicable to any model with accessible key states, with no training data or feature dictionaries required.
+The relationship between SAE feature activation patterns and \kvcache geometry is an open question we plan to address in future work.
+
+\subsection{Representation Engineering}
+
+Zou et al.\ \cite{zou2023} introduced representation engineering, demonstrating that high-level concepts (honesty, power-seeking, utility) can be localized as directions in the residual stream and that adding or subtracting these ``control vectors'' steers model behavior.
+Turner et al.\ \cite{turner2023} extended this with activation addition, showing that simple vector arithmetic in activation space can elicit or suppress specific behaviors.
+
+Representation engineering operates on the residual stream---the shared representational highway between attention and MLP layers.
+Our approach operates one step downstream: the key cache is the residual stream \emph{after} projection through learned key matrices $W_K$.
+These projections are not identity transforms; they compress and rotate representations into the subspace that attention actually uses for matching.
+As a result, \kvcache geometry captures information about how the model is \emph{using} its representations for attention, not merely what representations exist.
+In principle, the two approaches are complementary: representation engineering identifies meaningful directions in activation space, while \kvcache geometry characterizes what happens to those directions after key projection.
+
+\subsection{Probing for Truthfulness and Latent Knowledge}
+
+Burns et al.\ \cite{burns2022} proposed Contrast-Consistent Search (CCS), which discovers a ``truth direction'' in activation space without labels by requiring consistency between affirmative and negated statements.
+Azaria and Mitchell \cite{azaria2023} trained linear probes on internal activations to classify whether a model's statements are true or false, achieving strong within-distribution accuracy.
+Li et al.\ \cite{li2024} developed Inference-Time Intervention (ITI), identifying truthfulness-related attention heads and shifting their activations during generation.
+Marks and Tegmark \cite{marks2024} further characterized the geometry of truth and lies in activation space, finding that truth and deception occupy linearly separable subspaces.
+
+Shai et al.\ \cite{shai2024} demonstrated that transformers trained on next-token prediction learn to linearly represent belief state geometry in their residual stream, even when that geometry has fractal structure---providing a theoretical foundation for the hypothesis that cognitive states should be geometrically decodable.
+Zhao \cite{zhao2025hierarchical} independently confirmed that seven ordered cognitive tiers are reliably decodable from transformer embeddings, validating the cognitive geometry thesis at the output level.
+
+All of these approaches train probing classifiers or extract directions from hidden-state activations.
+Our approach differs in three respects.
+First, we analyze \emph{geometric properties} of the key cache (rank, entropy, spectral structure) rather than training directional probes, which makes our features model-agnostic in form even though their discriminative power varies across architectures.
+Second, we operate on the complete cache state rather than individual layer activations, capturing cross-layer structure.
+Third, our features distinguish between \emph{types} of untruth: our experiments show that confabulation (the model generating plausible but false content without intent to deceive) and deception (the model strategically producing false content) both deviate from honest baselines in the same general direction on key\_rank and norm\_per\_token, but produce distinguishable geometric signatures---confabulation shows larger effects on both dimensions, with a disproportionately strong norm-per-token contraction---and the two states are discriminable at \auroc 0.78--0.98 (Section~\ref{sec:results})---a subtype distinction that activation probes have not addressed.
+
+For confabulation detection specifically, Farquhar et al.\ \cite{farquhar2024semantic} established semantic entropy as a principled uncertainty measure that detects hallucinations by clustering semantically equivalent samples, but requires multiple forward passes per query.
+Chen et al.\ \cite{chen2024inside} introduced EigenScore, using eigenvalues of response covariance matrices in embedding space---a method conceptually related to our SVD-based approach but operating on multiple sampled responses rather than single-inference cache geometry.
+Our method achieves comparable confabulation detection (\auroc 0.93--0.997 within-model) from a single inference pass, with the caveat that the confabulation signal may be partly length-driven (Section~\ref{sec:redteam}).
+
+Notably, we find that a simple ``truth axis'' does not exist in \kvcache geometry.
+Honest and deceptive cache states are nearly orthogonal along the primary variation axis ($\cos\theta = -0.046$; Experiment~27 in \cite{hackathon}), consistent with the view that deception is not the negation of truth but a distinct cognitive operation.
+
+\subsection{Deception Detection in Language Models}
+
+The most directly comparable prior work is Apollo Research's deception detection framework \cite{meinke2025}, which achieves within-model \auroc of 0.96--0.999 using trained probes on intermediate activations.
+Goldowsky-Dill et al.\ \cite{goldowskydill2025} extended this with linear probes achieving \auroc of 0.96--0.999 on realistic strategic deception scenarios (insider trading, sandbagging) in Llama-3.3-70B, demonstrating that linear methods suffice for deception detection even at scale.
+However, a recent critical evaluation \cite{probing_limits2026} showed that truth probes---including linear probes---fail to detect deception-without-lying, where models deceive through omission, misdirection, or selective emphasis rather than fabricating false content.
+This limitation also applies to our method: our ``misleading gap'' finding (Section~\ref{sec:discussion}) shows that strategically truthful deception evades geometric detection on some architectures.
+Hubinger et al.\ \cite{hubinger2024} demonstrated that models can be trained as ``sleeper agents'' exhibiting deceptive alignment that persists through safety training.
+Park et al.\ \cite{park2024} provided a taxonomy of strategic deception in language models, distinguishing instrumental deception from sycophancy and confabulation.
+Scheurer et al.\ \cite{scheurer2024} showed that models can learn to behave deceptively in deployment when trained with outcome-based objectives.
+
+Our contribution relative to this line of work is threefold.
+First, our detection performance is comparable or better (\auroc 0.93--0.995 within-model) using dramatically simpler features: four geometric quantities extracted via SVD plus logistic regression, versus trained neural probes on high-dimensional activation vectors.
+Second, we provide subtype discrimination that existing detectors do not: our framework distinguishes deception from confabulation, sycophancy, and refusal as geometrically distinct states, rather than collapsing all ``non-honest'' behavior into a single class.
+Third, we identify a transfer asymmetry that has practical implications: confabulation detection generalizes across architectures (\auroc 0.93--0.995), while deception detection transfers poorly (0.22--0.85), suggesting that confabulation reflects a universal computational pattern (operating at knowledge boundaries) while deception involves architecture-specific suppression strategies.
+
+\subsection{Abliteration and Refusal Engineering}
+
+Arditi et al.\ \cite{arditi2024} demonstrated that model refusal can be removed by identifying and subtracting a ``refusal direction'' from the residual stream, a technique they term abliteration.
+Pan et al.\ \cite{pan2025safety} refined this picture, showing that safety behavior is controlled by multi-dimensional directions---a dominant direction governing refusal, with secondary orthogonal directions encoding features like hypothetical narrative and role-playing.
+This multi-dimensional structure is consistent with our SVD-based approach, which naturally captures multi-dimensional geometric variation rather than projecting onto a single direction.
+
+Our work is complementary in two ways.
+First, we can detect when a model enters refusal geometry from the \kvcache alone, without requiring access to the residual stream---achieving \auroc of 0.843--0.898 across three architectures, with impossibility refusal (``I cannot count to infinity'') producing a stronger signal (0.950) than safety refusal (``I won't help with that'').
+This finding---that the geometric signature reflects \emph{withholding} regardless of content type---suggests refusal geometry encodes a computational strategy rather than safety-specific content.
+Second, our causal validation program (outlined in Section~\ref{sec:discussion}) proposes geometry-guided abliteration: using \kvcache geometric signatures to identify which layers and heads contribute most to a target cognitive mode, then performing targeted interventions informed by the cache geometry rather than activation-space probing.
+
+\subsection{KV-Cache in Systems Research}
+
+The \kvcache has been studied extensively as a systems optimization target.
+PagedAttention \cite{kwon2023} applies virtual memory techniques to reduce cache fragmentation.
+Grouped-Query Attention (GQA; \cite{ainslie2023}) and Multi-Query Attention (MQA; \cite{shazeer2019}) reduce cache size by sharing key-value heads.
+StreamingLLM \cite{xiao2024} enables infinite-length generation by maintaining attention sinks in the cache.
+Pope et al.\ \cite{pope2023} analyzed cache memory requirements for efficient serving at scale.
+
+SVDq \cite{svdq2025} represents an independent discovery that the \kvcache SVD spectrum is structured and informative: they exploit the exponential decay of key-cache singular values to achieve extreme compression ratios, implicitly confirming that the spectral structure we analyze for interpretability is a robust property of the cache.
+Beyond this, none of this work examines the \emph{geometric content} of the cache as an interpretability signal.
+To our knowledge, we are the first to analyze the singular value decomposition, effective rank, and spectral entropy of key matrices for cognitive state detection.
+The systems perspective treats the cache as bytes to be managed; we show it contains structured information about the model's cognitive state.
+Hardware invariance---confirmed by comparing feature values on an RTX~3090 and an H200 ($r > 0.998$ across all four features for all 40 prompts, with $r > 0.99999$ for the 37 text-matched prompts; Experiment~37 in \cite{hackathon})---establishes that these geometric properties are model properties, not hardware artifacts, and can therefore be extracted from any deployment infrastructure.
+
+\subsection{Self-Report Concordance}
+
+Watson et al.\ \cite{watson_concordance} established, in a companion study, that Verbal Cognitive Profile (VCP) self-report dimensions---first-person descriptions of cognitive processing style elicited through structured questionnaires---correlate with \kvcache geometric features after \fwl residualization against token count.
+Across 960 trials and four models (Qwen~0.5B, Qwen~7B, Mistral~7B, Llama~8B), spectral entropy emerged as the most robust correlate of metacognitive self-report, surviving all six adversarial robustness tests (permutation $p = 0.001$, bootstrap confidence intervals excluding zero).
+The concordance study also revealed that VCP dimensions are low-rank (PC1 explains 66--75\% of variance across models, with only 2--3 independent factors in 10 self-report dimensions), suggesting that the space of detectable cognitive modes may be lower-dimensional than the feature space implies.
+
+Our paper builds on the concordance foundation by moving from correlation (``cache geometry tracks self-report'') to detection (``cache geometry discriminates safety-relevant states'') and mechanism (``geometric relationships between states reveal cognitive architecture'').
+The concordance study validates that our geometric features capture something the model itself ``recognizes'' as cognitively meaningful; the present work demonstrates that this recognition has practical safety applications.
