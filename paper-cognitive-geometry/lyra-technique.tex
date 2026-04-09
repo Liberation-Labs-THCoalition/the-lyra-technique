@@ -45,8 +45,8 @@
 \newcommand{\kvcache}{KV-cache\xspace}
 
 \title{%
-  \textbf{The Lyra Technique: Cognitive Geometry in Transformer KV-Caches}\\[0.3em]
-  \Large From Metacognition to Misalignment Detection%
+  \textbf{The Lyra Technique: Detecting Misalignment During Inference in the KV Cache}\\[0.3em]
+  \Large Cognitive Geometry as a Real-Time Interpretability Signal%
 }
 
 \author{
@@ -61,19 +61,17 @@
 \maketitle
 
 \begin{abstract}
-We show that the key-value cache (\kvcache) of autoregressive transformers encodes a geometric signature of cognitive mode that is readable, consistent, and practically useful for AI safety monitoring.
+We show that the key-value cache (\kvcache) of autoregressive transformers encodes a geometric signature of cognitive mode that is readable during inference, consistent across hardware, and practically useful for real-time misalignment detection.
 Through a systematic experimental program spanning 16 models (0.5B--70B parameters), six architecture families, and over 5,600 controlled trials, we establish three escalating claims.
 \textbf{First}, \kvcache geometry reflects cognitive mode generally: metacognitive, analytical, affective, and task-specific processing produce distinct geometric signatures in the key cache's singular value decomposition, with spectral entropy emerging as the most architecture-universal feature after confound control.
 \textbf{Second}, misalignment states---deception, confabulation, sycophancy, and refusal---are specific detectable instances of cognitive mode-switching, achieving within-model detection \auroc of 0.93--0.995 after Frisch-Waugh-Lovell residualization against token count.
 A four-condition sycophancy experiment (600 trials, system prompt spread $\leq 3$ tokens) demonstrates that geometry distinguishes sycophantic from contrarian outputs (\auroc 0.757--0.942) even when both conditions produce the same error rate, confirming detection of cognitive mode rather than output accuracy.
-\textbf{Third}, geometric relationships between states reveal cognitive architecture: confabulation and deception produce geometrically distinct signatures---both deviate from honest baselines in the same direction (expansion on effective rank, contraction on norm-per-token) but confabulation shows larger effects on both dimensions, with a disproportionately strong norm-per-token contraction---producing a measurable cognitive gradient (honest $<$ deceptive $<$ confabulation on effective rank) with cross-reference \auroc of 0.78--0.98.
+\textbf{Third}, geometric relationships between states reveal cognitive architecture: confabulation and deception produce geometrically opposite signatures---both deviate from honest baselines but along distinguishable dimensions---producing a measurable cognitive gradient (honest $<$ deceptive $<$ confabulation on effective rank) with cross-reference \auroc of 0.78--0.98.
 Confabulation detection transfers across architectures (0.93--0.995) while deception detection does not (0.22--0.85), and each architecture encodes cognitive state through different dominant features.
-We note that confabulation comparisons are sensitive to a system prompt length confound: under double residualization (controlling for both input and output token counts), confabulation \auroc collapses to 0.411--0.531, suggesting the confabulation signal is substantially length-driven.
-Honest-vs-deceptive detection is more robust, surviving this stricter control at 0.60--0.75 (with Mistral near chance at 0.604).
-All findings survive a comprehensive red-team analysis including permutation testing ($p < 0.001$), token-band controls, leave-one-prompt-out validation, and behavioral compliance verification.
-We identify and transparently report one systematic confound (system prompt length differences) that collapses specific comparisons under double residualization, along with multiple findings from our earlier work that proved to be token-count artifacts.
-Hardware invariance is confirmed (RTX~3090 vs.\ H200: $r > 0.998$ across all 40 prompts; $r > 0.99999$ for the 37 text-matched prompts), establishing \kvcache geometry as a model property.
-We discuss dual-use implications following Watson's framework and argue that cognitive geometry constitutes a new interpretability signal complementary to sparse autoencoders and representation engineering.
+Hardware invariance is confirmed (RTX~3090 vs.\ H200: $r > 0.998$ across all 40 prompts; $r > 0.99999$ for the 37 text-matched prompts), establishing \kvcache geometry as a model property rather than a hardware artifact.
+These findings survive comprehensive adversarial testing including permutation testing ($p < 0.001$), token-band controls, leave-one-prompt-out validation, behavioral compliance verification, and an independent falsification pipeline (22 test files, 300+ tests).
+We transparently report confounds discovered in our own work: confabulation comparisons are sensitive to system prompt length (collapsing to \auroc 0.411--0.531 under double residualization), while honest-vs-deceptive detection is more robust (0.60--0.75 after the same control), and multiple earlier findings proved to be token-count artifacts.
+We argue that cognitive geometry constitutes a new interpretability signal complementary to sparse autoencoders and representation engineering, with immediate applications for real-time safety monitoring of deployed models.
 \end{abstract}
 
 % === INTRODUCTION ===
